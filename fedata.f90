@@ -2,7 +2,7 @@ module fedata
 ! This module is used to define global values and matrices
 
    ! Variables
-   integer :: ne, nn, nb, nd, np, nm, nk, neqn, bw
+   integer :: ne, nn, nb, nd, np, nm, nk, neqn, bw, neqn_nb
    integer :: n_ptz, ne_ptz
    ! nk = springs, nd = knuder der skal minimeres
 

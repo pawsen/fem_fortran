@@ -34,14 +34,15 @@ contains
 
     CALL DMUMPS(id)
     IF ( id%MYID .eq. 0 ) THEN
-       id%N = size(p,1)
+
+       id%N = neqn_nb
        id%NZ = size(iK,1)
        ! point to stiffness vectors
        id%IRN => iK
        id%JCN => jK
        id%A => sK
 
-       if (eigenvalue%calc) then
+       if ((antype == 'EIGEN') .or. eigenvalue%calc) then
           ALLOCATE( id%RHS ( id%N ) )
        else
           ! id%RHS => p

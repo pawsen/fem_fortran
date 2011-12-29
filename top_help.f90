@@ -7,12 +7,13 @@ MODULE top_help
   PRIVATE
   PUBLIC :: mma_handle, oc, neighbourMatrix,filter, density_filter, gradient, &
        finite_check, lambda_calc, force_rho,force_elements_init
+  PUBLIC :: compare_eigenval
 
 CONTAINS
 
   SUBROUTINE mma_handle(iteration,inak,low,upp,max_vol,objekt,vol,rho, rho_old, rho_old2, &
        df0dx, dg,rho_tilde,nc,movelimit_in,constraint,dconstraint)
-    
+
 	use fedata
 
 	REAL(8), DIMENSION(:), intent(INOUT) :: low, upp, rho_old, rho_old2, rho
@@ -41,25 +42,33 @@ CONTAINS
     REAL(8), DIMENSION(:), allocatable :: xmin, xmax !size=ne
 	REAL(8), DIMENSION(:), allocatable :: dfdx
     REAL(8), DIMENSION(:), allocatable :: UU,GRADF, DSRCH,PMMA, QMMA,BMMA, ymma, ulam,HESSF
-
+    
+    allocate( dfdx(nc*j),PMMA(nc*j), QMMA(nc*j)  ) ! alle gradienter til contraints      
+    
+    allocate( UU(nc),GRADF(nc), DSRCH(nc),BMMA(nc),IYFREE(nc),ymma(nc) )
+    allocate(ulam(nc),HESSF(nc*(nc+1)/2))
+    allocate(amma(nc),cmma(nc),fval(nc),fmax(nc)) 
+    
     if (inak%bool) then
        ne_aktiv = size(inak%act,1)
     else
        ne_aktiv = ne
     end if
-    j = ne_aktiv ! number of elements that is to be optimized
+    
+    j = ne_aktiv ! number of elements that is to be optimized == design variabels
     allocate(xmin(j),xmax(j))
     allocate(ALFA(j),BETA(j),P0(j),Q0(j))
     allocate(rho_new(j))
-	allocate( UU(nc),GRADF(nc), DSRCH(nc),BMMA(nc),IYFREE(nc),ymma(nc), ulam(nc),HESSF(nc*(nc+1)/2))
-	allocate(amma(nc),cmma(nc),fval(nc),fmax(nc)) 
-	allocate( dfdx(nc*j),PMMA(nc*j), QMMA(nc*j)  ) ! alle gradienter til contraints      
-
- ! Initialisering af MMA-parametre
+       
+    !FVAL(i): Value of the i:th constarint
+    !FMAX(i): Right hand side of the i:th constraint
+    !DFDX(k): Dericative of f_i(x) with respect to x_j, where k = (j-1)*M+i
+    
+    ! Initialisering af MMA-parametre
     amma = 0.0
     cmma = 1000.0
     geps = 1.0E-6
-    fmax = 0.0 ! rhs. af constraint, sum(rho)/V_max - 1 <=0
+    fmax = 0.0 ! rhs. af vol. constraint, sum(rho)/V_max - 1 <=0
     top_vol = 0.0
     IYFREE = 0
 
@@ -451,8 +460,9 @@ CONTAINS
   END SUBROUTINE density_filter
 
 
-  subroutine gradient(flag,problem_type,inak ,D_in,vol,max_vol,rho, rho_min, dc, dg, &
-       lambda1,lambda2,dc2, eigenval,eigenvec)
+  subroutine gradient(flag,problem_type,inak ,D_in,rho, rho_min,dc,vol,max_vol, dg, &
+       lambda1,lambda2,dc2, &
+       eigenval,eigenvec,eigenval_d,eigenvec_d, double_eigen)
 
 	! This subroutine calculates the gradients:
 
@@ -465,16 +475,16 @@ CONTAINS
     use mindlin42
 
     integer, INTENT(IN) :: flag, problem_type
-    real(8), dimension(:), intent(IN) :: vol, rho, D_in
-    real(8), intent(IN) :: rho_min, max_vol
+    real(8), dimension(:), intent(IN) :: rho, D_in
+    real(8), intent(IN) :: rho_min
+    real(8), intent(in), optional :: max_vol, vol(:)
     real(8), dimension(:), optional, intent(IN) :: lambda1! lambda1 er til force_inverter
     real(8), dimension(:), optional, intent(IN) :: lambda2
-    real(8), dimension(:), intent(OUT) :: dc, dg
-    real(8), dimension(:), optional, intent(OUT) :: dc2
-    real(8), optional, intent(IN) :: eigenval, eigenvec(:)
+    real(8), dimension(:), intent(OUT) :: dc
+    real(8), dimension(:), optional, intent(OUT) :: dg, dc2
     type(INAKTIV_def), intent(in) :: inak
 
-    integer :: e, i, nen, mdim, kk, ne_aktiv
+    integer :: e, i, nen, mdim, kk,ii,j, ne_aktiv
     integer, parameter :: ndim = 4
     integer:: idof(ndim)
     real(8), dimension(ndim) :: helpproduct1,lamb2
@@ -485,6 +495,11 @@ CONTAINS
     real(8) :: lamb1(8), rtemp(8), rtemp2(8)
     real(8) :: young, nu, thk, alpha, tstart, tend, deltaT, kcond, Ae(8,4), fact
     real(8) :: shear, dens
+
+    !eigenvalue
+    real(8), allocatable :: de1(:,:), eigenval_lapack(:), mat(:,:)
+    real(8), optional, intent(IN) :: eigenval,eigenval_d(:),eigenvec(:), eigenvec_d(:,:)
+    logical,optional, intent(in) :: double_eigen
 
     select case( element(1)%id )
     case(2)
@@ -540,6 +555,9 @@ CONTAINS
                    call plane42_thermKobling(xe, ng, young, nu, alpha, thk,Ae)
                    kcond = mprop(element(e)%mat)%kcond
                    call plane41_ke_t(xe,ng, kcond, thk, ke_t)
+                case(12)
+                   dens = mprop(element(e)%mat)%dens
+                   call plane42_me(xe,dens,thk, ng, me)
                 end select
              case(3:6)!plate
                 shear = mprop(element(e)%mat)%shear
@@ -586,22 +604,51 @@ CONTAINS
              dc2(i) = -penal*(1d0-rho_min)*rho(i)**(penal-1d0) *DOT_PRODUCT(lamb1,matmul(ke,de))
 
           case(12) !eigenfrequency
-             de = eigenvec(edof)
-             !normalization of eigenvector wrt. mass matrix
-             de = de/SQRT(DOT_PRODUCT(de,matmul(me,de)))
+             if (.not. double_eigen) then
+                de = eigenvec(edof)
+                !normalization of eigenvector wrt. mass matrix
+                de = de/SQRT(DOT_PRODUCT(de,matmul(me,de)))
 
-             if (rho(i)<0.1) then
-                helpmat =  penal*(1d0-rho_min)*rho(i)**(penal-1d0)*ke - eigenval * 6d0*rho(i)**5 *me
+                call eigen_mat(rho(i),rho_min,eigenval,ke,me,helpmat)
+                dc(i) = DOT_PRODUCT(de,matmul(helpmat,de))
+
              else
-                helpmat =  penal*(1d0-rho_min)*rho(i)**(penal-1d0)*ke - eigenval *me
+                if (.not. allocated(de1)) then
+                   allocate(de1(mdim,2), mat(2,2), eigenval_lapack(2))
+                end if
+                de1(:,1) = eigenvec_d(edof,1)
+                de1(:,1) = de1(:,1)/SQRT(DOT_PRODUCT(de1(:,1),matmul(me,de1(:,1))))
+                de1(:,2) = eigenvec_d(edof,2)
+                de1(:,2) = de1(:,2)/SQRT(DOT_PRODUCT(de1(:,2),matmul(me,de1(:,2))))
+
+                !from (26) in article by Jensen&Pedersen we store the sensitivities from an double eigenfrequency in mat
+                do ii=1,2
+                   do j=1,2
+                      call eigen_mat(rho(i),rho_min,eigenval,ke,me,helpmat)
+                      mat(ii,j) = DOT_PRODUCT(de1(:,ii),matmul(helpmat,de1(:,j)))
+                   end do
+                end do
+                !because of symmetri, we have
+                !mat(2,1) = mat(1,2) ! udkommenteret pga debugigng
+
+                ! find eigenvalues and vectors of mat. Eigenvectors are stored columm-wise and are orthonormal.
+                call lapack_eigenval(mat,eigenval_lapack)
+
+                ! linear combination to find the "new" eigenvectors
+                de = mat(1,1)*de1(:,1) + mat(2,1)*de1(:,2)
+                call eigen_mat(rho(i),rho_min,eigenval_lapack(1),ke,me,helpmat)
+                !the new sensitivities
+                dc(i) = DOT_PRODUCT(de,matmul(helpmat,de))
+
+                de = mat(1,2)*de1(:,1) + mat(2,2)*de1(:,2)
+                call eigen_mat(rho(i),rho_min,eigenval_lapack(2),ke,me,helpmat)
+                dc2(i) = DOT_PRODUCT(de,matmul(helpmat,de))
+
              end if
-             dc(i) = DOT_PRODUCT(de,matmul(helpmat,de))
 
           case default ! compliance = gradient på "normal" vis.
              dc(i) = - penal*(1d0-rho_min)*rho(i)**(penal-1d0) * DOT_PRODUCT(de,matmul(ke,de))! de=eigenvector
-          end select
-
-          dg(i) = vol(i)/max_vol ! skaleret!
+          end select   
        end do
 
     elseif (problem_type == 6) then !ikke-lineï¿½r Force inverter
@@ -641,14 +688,31 @@ CONTAINS
 
           lamb1 = lambda1(edof)
           residual = res_vek(edof)
-
+          
           dc(e) =  DOT_PRODUCT(lamb1,residual)
-
-          dg(e) = vol(e)/max_vol ! skaleret!
        end do
     end if
 
+    if (present(dg)) then
+       dg = vol/max_vol ! skaleret!
+    end if
+
   end subroutine gradient
+
+  subroutine eigen_mat(rho,rho_min,eigenval,ke,me,helpmat)
+
+    use fedata
+!    integer, intent(in) :: i
+    real(8), intent(in) :: rho,rho_min,eigenval,ke(:,:),me(:,:)
+    real(8), intent(out) :: helpmat(:,:)
+
+    if (rho<0.1) then
+       helpmat =  penal*(1d0-rho_min)*rho**(penal-1d0)*ke - eigenval * 6d0*rho**5 *me
+    else
+       helpmat =  penal*(1d0-rho_min)*rho**(penal-1d0)*ke - eigenval *me
+    end if
+
+  end subroutine eigen_mat
 
 
   subroutine lambda_calc(flag,problem_type,rho,rho_min,lambda1,lambda2)
@@ -1077,10 +1141,41 @@ CONTAINS
 
 	do i = 1,size(force_elements,1)
        rho(force_elements(i))=1.0d0
-  	end do
+    end do
 
   end subroutine force_rho
 
+  subroutine compare_eigenval(w,index)
+
+    real(8), intent(in) :: w(:)
+    integer, intent(out) :: index(:)
+    integer :: i,j,n_eigen
+    real(8) :: tol
+   
+    tol = 1E-3
+
+    index = 0
+    
+    !index = [1,2]
+    !return
+
+    n_eigen = size(w,1)
+    do i=1,n_eigen
+       do j=1,n_eigen
+          if (j > i) then
+             if ( ABS(w(i)-w(j)) < tol) then
+                !eigenvalues are numerical identical.
+                !In the present implementation of the optimization, we can only have two identical eigenvalues
+                index(1) = i
+                index(2) = j
+                return
+             end if
+          end if
+       end do
+    end do
+
+
+  end subroutine compare_eigenval
 
 
 END MODULE top_help

@@ -4,7 +4,7 @@ module fea
 
   private
   public :: displ, initial_fea, buildload, buildstiff_fea, enforce_fea, recover, volume, areal
-  public :: buildmass_fea, mmul_fea, build_mvec, mvec_mul, eigen
+  public :: buildmass_fea, mmul_fea, build_mvec, mvec_mul, eigen, assemble_sparse
 
 
 contains
@@ -64,35 +64,35 @@ contains
     if (banded ==  2) then ! sparse format with lagrangian multiplier
 
 
-       if ((eigenvalue%calc) .and.  (eigenvalue%shift .eqv. .false.)) then
+       if ( ((antype == 'EIGEN') .and.  (eigenvalue%shift .eqv. .false.)) .or. &
+            ( antype == 'TOPSTRUCT_EIGEN') ) then
+          neqn_nb = neqn
           nzz = 8*8*ne
           nzz2 = nzz + 2*nb ! til debug
           print*,'AAA'
-       elseif (eigenvalue%calc .and. eigenvalue%shift) then
-          nzz = 8*8*ne+2*nb
-
-          nzz2 = nzz! til debug
-          print*,'BBBCCCBBB'
        else
+          print*,'BBBCCCBBB'
+          neqn_nb = neqn+nb
           nzz = 8*8*ne+2*nb !8*8*ne is the number of times the local stiffness matrix adds a value to the global(including dublicates, eg. is't not nz(number of non-zeros)). Because of lagrangien multiplier there is added xtra two non-zero entries for each RB
           print*,'allokering, normal fea'
-          nzz2 = nzz
+          nzz2 = nzz! til debug
        end if
 
-       allocate (p(neqn+nb), d(neqn+nb))
+       if (antype /= 'EIGEN') then
+          allocate (p(neqn+nb), d(neqn+nb))
+       end if
+
        allocate (iK(nzz),jK(nzz),sK(nzz))
        allocate (iK2(nzz2),jK2(nzz2),sK2(nzz2))
     else! normalt
        allocate (p(neqn), d(neqn))
     endif
 
-    allocate (strain(ne, 3), stress(ne, 3))
-
-    ! MODIFIED FOR WINDOWS COMPILER
-    do e=1,ne
-       strain(e,1:3) = 0
-       stress(e,1:3) = 0
-    enddo
+    if (antype /= 'EIGEN') then
+       allocate (strain(ne, 3), stress(ne, 3))
+       strain = 0d0
+       stress = 0d0
+    end if
 
   end subroutine initial_fea
 
@@ -385,16 +385,16 @@ contains
           ke = rho(e)*ke1 + (1.0d0-rho(e))*ke2
        end if
 
-       if(eigenvalue%shift) then
-          dens = mprop(element(e)%mat)%dens
-          sigma = eigenvalue%sigma
-          call plane42_me(xe,dens,thk, ng,me)
-          call lump_mass(nen,2,me,me_lumped)
-          !ke = ke-sigma*me
-          do i=1,2*nen
-             ke(i,i) = ke(i,i)-sigma*me_lumped(i)
-          end do
-       end if
+       ! if(eigenvalue%shift) then
+       !    dens = mprop(element(e)%mat)%dens
+       !    sigma = eigenvalue%sigma
+       !    call plane42_me(xe,dens,thk, ng,me)
+       !    call lump_mass(nen,2,me,me_lumped)
+       !    !ke = ke-sigma*me
+       !    do i=1,2*nen
+       !       ke(i,i) = ke(i,i)-sigma*me_lumped(i)
+       !    end do
+       ! end if
 
        ! Assemble into global matrix
        if (banded == 0) then
@@ -409,9 +409,9 @@ contains
           end do
        elseif (banded == 2) then ! sparse, Benytter ikke symmetrien
           if (present(rho) .and. ((element(e)%mat /= elem_id))) then
-             call assemble_sparse(nen,ii,edof,ke,jj,rho,rho_min)
+             call assemble_sparse(nen,2,ii,edof,ke,jj,rho,rho_min)
           else
-             call assemble_sparse(nen,ii,edof,ke)
+             call assemble_sparse(nen,2,ii,edof,ke)
           end if
        else ! banded
           do i = 1, 2*nen
@@ -431,7 +431,7 @@ contains
     end do
 
     !add values from lagrangian multipliers. BUT not if it's a eigenvalue problem vithout shift
-    if ( banded == 2 .and. (.not. eigenvalue%calc .or. eigenvalue%shift)) then
+    if ( banded == 2 .and. ((antype /= 'EIGEN') .or. eigenvalue%shift)) then
        do i=1,nb
           if (bound(i,2) /= 3) then! bound(i,2) = 3 => temp p� randen
              idof = 2*(bound(i,1)-1) + bound(i,2)
@@ -465,10 +465,10 @@ contains
 
   end subroutine buildstiff_fea
 
-  subroutine assemble_sparse(nen,ii,edof,ke,jj,rho,rho_min)
+  subroutine assemble_sparse(nen,kk,ii,edof,ke,jj,rho,rho_min)
     
     use fedata
-    integer, intent(in) :: nen, edof(:)
+    integer, intent(in) :: nen,kk, edof(:)
     integer, intent(inout) :: ii
     real(8), intent(in) :: ke(:,:)
     integer, intent(inout), optional :: jj
@@ -477,8 +477,8 @@ contains
 
     if (present(rho)) then
        jj = jj +1
-       do i = 1, 2*nen
-          do j =1, 2*nen
+       do i = 1, kk*nen
+          do j =1, kk*nen
              ii = ii+1
              iK(ii) = edof(i)
              jK(ii) = edof(j)
@@ -487,8 +487,8 @@ contains
           end do
        end do
     else
-       do i = 1, 2*nen
-          do j =1, 2*nen
+       do i = 1, kk*nen
+          do j =1, kk*nen
              ii = ii+1
              iK(ii) = edof(i)
              jK(ii) = edof(j)

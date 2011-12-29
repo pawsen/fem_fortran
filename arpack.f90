@@ -15,14 +15,15 @@ CONTAINS
     use piezo
     use solve_handle_real
     use exodus
+    use plate, only : buildstiff_plate
 
     real(8), allocatable :: tmp_mat(:,:)
-    integer :: nzz,i, n_eigen, j
+    integer :: nzz,i, n_eigen, j, n_conv
     real(8) :: sigma
     logical :: shift
     real(8), allocatable :: eigenval(:,:), eigenvec(:,:)
 
-    sigma = 1000d0
+    sigma = 0d0 !1000d0
     eigenvalue%sigma = sigma
     shift = eigenvalue%shift    
     
@@ -46,19 +47,25 @@ CONTAINS
 !!$       call mumps_init_real
 !!$       call mumps_solve_real(4)
     else
+       select case( element(1)%id )
+       case(2)
+          call buildstiff_fea(0)
+       case default
+          call buildstiff_plate
+       end select
+
        call build_mvec
-       call buildstiff_fea(0)
        call mumps_init_real
        call mumps_solve_real(4)
     end if
 
 
-    call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,eigenval,eigenvec)
-    call exodus_write(eigenval,eigenvec)
+    call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,n_conv,eigenval,eigenvec)
+    call exodus_write(eigenval(1:n_conv,:),eigenvec(:,1:n_conv))
 
   end subroutine arpack_init
 
-  subroutine arpack_plane(n_eigenvalue,neqn,shift,sigma,iK,jK,sK,eigenval,eigenvec)
+  subroutine arpack_plane(n_eigenvalue,neqn,shift,sigma,iK,jK,sK, n_converged, eigenval, eigenvec)
     
     use fea
     use solve_handle_real
@@ -66,12 +73,13 @@ CONTAINS
     use sort_array
    
     integer, intent(in) :: n_eigenvalue, neqn, iK(:), jK(:)
+    integer, intent(out) :: n_converged
     real(8), intent(out) :: eigenval(:,:), eigenvec(:,:)
     real(8), intent(in), optional :: sK(:)
     real(8), intent(IN) :: sigma
     logical, intent(IN) :: shift
 
-    integer, parameter :: maxn=1000000, maxnev=20, maxncv=25,ldv=maxn
+    integer, parameter :: maxn=1000000, maxnev=16, maxncv=24,ldv=maxn
     integer :: i, index_list(n_eigenvalue), print_info
     !%--------------%
     !| Local Arrays |
@@ -99,8 +107,11 @@ CONTAINS
     !%-----------------------------%
     !| BLAS & LAPACK routines used |
     !%-----------------------------%
-    real(8) ::          dnrm2, dlapy2
-    !external ::        daxpy, dnrm2, dpttrf, dpttrs, dlapy2
+    !dlapy2:  LAPACK routine to compute sqrt(x**2+y**2) carefully. function
+    !dnrm2:   Level 1 BLAS that computes the norm of a vector. function
+    !dcopy:   Level 1 BLAS that copies one vector to another. subroutine
+    real(8) :: dnrm2, dlapy2
+    external:: dnrm2, dlapy2, dcopy
 
     !%----------------------------------------------------%
     !| The number N is the dimension of the matrix.  A    |
@@ -117,7 +128,10 @@ CONTAINS
 
     n     = neqn
     nev   = n_eigenvalue
-    ncv   = 20 
+    ncv   = 20 ! ncv => 2*nev
+    if (.not. ncv > 2*nev) then
+       ncv = 2*nev
+    end if
     if ( n .gt. maxn ) then
        print *, ' ERROR with _NDRV3: N is greater than MAXN '
        stop
@@ -129,7 +143,6 @@ CONTAINS
        stop
     end if
     bmat  = 'G'
-    which = 'SM' !smallest magnitude
     sigmar = sigma ! shift freqvency
     sigmai = 0d0
 
@@ -145,7 +158,7 @@ CONTAINS
     !%-----------------------------------------------------%
 
     lworkl = 3*ncv**2+6*ncv 
-    tol    = 0d0!1E-!0.0 
+    tol    = 1E-8!1E-!0.0 
     ido    = 0
     info   = 0
 
@@ -161,18 +174,21 @@ CONTAINS
 
     ishfts = 1
     maxitr = 300
-    if (shift) then
+    if (shift) then! always use shift. Even if sigma = 0.
        mode   = 3
+       which = 'LM' ! Largest magnitude
     else
        mode   = 2
+       which = 'SM' !smallest magnitude
     end if
 
     iparam(1) = ishfts 
     iparam(3) = maxitr  
     iparam(7) = mode 
 
+! print*,'mode ', mode
+! print*,'sigma ', sigma
 
-print*,'mode ', mode
     !%-------------------------------------------%
     !| M A I N   L O O P (Reverse communication) |
     !%-------------------------------------------%
@@ -455,12 +471,13 @@ print*,'mode ', mode
        !%---------------------------%
     end do
 
-    if (nconv >2) then
+    if (nconv >0) then
        eigenval(1:nconv,:) = d(1:nconv,1:3)
        eigenvec(:,1:nconv) = v(1:neqn, 1:nconv)
-
+       n_converged = nconv
     else
-       stop
+       print*,'No converged eigenvalues'
+       error stop
     end if
 
 !!$    eigenval = d(1:n_eigenvalue,1:3)

@@ -24,6 +24,7 @@ CONTAINS
     use piezo
     use solve_handle_real
     use exodus
+    use plate, only : buildstiff_plate
 
     integer, intent(IN) :: flag
     ! generelt fil
@@ -44,9 +45,6 @@ CONTAINS
     ! fd-check
     REAL(8), DIMENSION(:,:), allocatable :: df_approx
     real(8), dimension(10) :: para
-
-
-
 
     ! skalering
     real(8) :: f_scale
@@ -70,9 +68,11 @@ CONTAINS
 
     !eigenfrequency
     real(8) :: sigma
-    integer :: n_eigen
+    integer :: n_eigen, n_conv
     logical :: shift
     real(8), allocatable :: eigenval(:,:), eigenvec(:,:)
+    integer, allocatable ::list(:)
+
 
     ! Mn_iter = 100MA 
     REAL(8), DIMENSION(:), allocatable:: low, upp
@@ -349,16 +349,18 @@ CONTAINS
        dconstraint = 0d0
 
     case(12) !eigenfrequency
+       call mumps_init_real
+
        eigenvalue%calc = .true.
-       sigma = 1000d0
+       sigma = 0d0
        eigenvalue%sigma = sigma
        shift = eigenvalue%shift
        n_eigen = 4
        allocate(eigenval(n_eigen,3), eigenvec(neqn,n_eigen))
-       !call initial_piezo !sker i main
 
-       nc = 4 ! kun tre udover volumen!
+       nc = n_eigen+1 !n_eigen + volumen!
        allocate(constraint(nc-1),dconstraint(ne_aktiv,nc))
+       allocate(list(2))!contains id of double eigenvalue
     end select
 
 
@@ -512,15 +514,24 @@ CONTAINS
           do e=1,ne
              dg(e) = vol(e)/max_vol
           end do
-          compliance_out(i) = maxval(constraint) ! Compliance er maxvï¿½rdien af de tre compliance
+          compliance_out(i) = maxval(constraint) ! Compliance er maxværdien af de tre compliance
        case(12)! eigenfrequency
-          call build_mvec(rho) !build mass-vecto
-          call buildstiff_eigenvalue_piezo(rho,rho_min)
-          call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,eigenval,eigenvec)
-          Compliance_out(i) = - MINVAL(eigenval(:,1))
-          
+          call build_mvec(rho) !build mass-vector
+          if (elem_type == 'PLATE_GMSH') then
+             call buildstiff_plate(rho,rho_min)
+          else
+             call buildstiff_fea(0,rho,rho_min)
+          end if
+
+          if (i == 1) then
+             call mumps_solve_real(1)! symbolic factorizing
+          end if 
+          call mumps_solve_real(2)! numerical factorizing
+          call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,n_conv,eigenval,eigenvec)
+
+          Compliance_out(i) = - MINVAL(eigenval(:,1))          
           do j=1,nc-1
-             constraint(j) = MINVAL(eigenval(:,1))
+             constraint(j) = -eigenval(j,1) - Compliance_out(i)
           end do
        end select
 
@@ -531,32 +542,32 @@ CONTAINS
        ! CALCULATION OF THE GRADIENTS:
        select case( problem_type )
        case(0) ! statik
-          call gradient(flag,problem_type,inak,D,vol,max_vol,rho,rho_min, dc, dg) ! #7
+          call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg) ! #7
        case(1:2,6) !force_inverter
-          call gradient(flag,problem_type,inak,D,vol,max_vol,rho,rho_min, dc, dg, lambda1)
+          call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg, lambda1)
        case(3) ! koblet mekanisme
-          call gradient(flag,problem_type,inak,D,vol,max_vol,rho,rho_min, dc, dg, lambda1,lambda2)
+          call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg, lambda1,lambda2)
        case(7)!mekanisme med begrænsning på krydsbevægelsen
-          call gradient(flag,problem_type,inak,D,vol,max_vol,rho,rho_min, dc, dg, lambda1,lambda2,dc_filter)! dc_filter er dc_hat
+          call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg, lambda1,lambda2,dc_filter)! dc_filter er dc_hat
           dconstraint(:,1) = 2 * (DOT_PRODUCT(L2,D)/DOT_PRODUCT(L,D)) * (dc_filter*DOT_PRODUCT(L,D) - &
                DOT_PRODUCT(L2,D)*dc)/DOT_PRODUCT(L,D)**2
        case(8)! min(max(compliance))
           do j=1,nk
-             call gradient(flag,problem_type,inak,D_mat(:,j),vol,max_vol,rho,rho_min, dc, dg)
+             call gradient(flag,problem_type,inak,D_mat(:,j),rho,rho_min, dc,vol,max_vol, dg)
              dconstraint(:,j) = dc
           end do
        case(9)! mekanisme - Robust
           problem_type = 1
           do j = 1,3
-             call gradient(flag,problem_type,inak,D_robust(:,j),vol,max_vol,rho_bar(:,j),rho_min,&
-                  dc, dg,lambda_mat(:,j))
+             call gradient(flag,problem_type,inak,D_robust(:,j),rho_bar(:,j),rho_min,&
+                  dc,vol,max_vol, dg,lambda_mat(:,j))
              dconstraint(:,j) = dc
           end do
           problem_type = 9
        case(10) ! elevator
           problem_type = 1
           do j=1,2
-             call gradient(flag,problem_type,inak,D,vol,max_vol,rho,rho_min, dc, dg, lambda_mat(:,j))
+             call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg, lambda_mat(:,j))
              dconstraint(:,j) = dc
           end do
           do e=1,ne
@@ -565,13 +576,26 @@ CONTAINS
           end do
           problem_type = 10
        case(12) ! eigenfrequency
+          call compare_eigenval(eigenval(:,1),list)
+          if(list(1) /= 0) then ! double eigenfrequency
+             call gradient(flag,problem_type,inak,(/0d0/),rho,rho_min,&
+                  dc,dc2= dconstraint(:,list(2)), &
+                  eigenval=eigenval(list(1),1), eigenvec_d=eigenvec(:,list),double_eigen=.true.)
+             dconstraint(:,list(1)) = dc
+             
+          end if
           do j=1,nc-1
-             call gradient(flag,problem_type,inak,(/0d0/),vol,max_vol,rho,rho_min, dc, dg,&
-                  eigenval=eigenval(j,1), eigenvec=eigenvec(:,j))
-             dconstraint(:,j) = dc
+             if ((j == list(1) ).or. (j==list(2))) cycle
+             
+             call gradient(flag,problem_type,inak,(/0d0/),rho,rho_min, dc,&
+                  eigenval=eigenval(j,1), eigenvec=eigenvec(:,j),double_eigen=.false.)
+             dconstraint(:,j) = -dc
           end do
-          dconstraint(:,nc) = dg
+          dconstraint(:,nc) = vol/max_vol !dg, skaleret volumen
           dc = -1d0
+          do j=1,nc-1
+             dconstraint(:,j) = dconstraint(:,j) - dc
+          end do
        end select
 
 

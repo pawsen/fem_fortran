@@ -68,7 +68,7 @@ CONTAINS
     num_dim = 3
     num_nodes = nn
     num_elem = ne
-    if (ne == ne_ptz .or. ne_ptz == 0) then
+    if ((ne == ne_ptz) .or. (ne_ptz == 0)) then
        num_elem_blk = 1 ! different blok set(eg. groups of elements)
     else
        num_elem_blk = 2
@@ -93,7 +93,7 @@ CONTAINS
 
     !write element block parameters
     ! pcb-elements
-    if (ne == ne_ptz .or. ne_ptz == 0) then
+    if ((ne == ne_ptz) .or. (ne_ptz == 0)) then
        num_elem_in_block(1) = ne
     else
        num_elem_in_block(1) = ne-ne_ptz
@@ -152,14 +152,14 @@ CONTAINS
 
     !write results variables parameters and names
     !nodes
-    if ( antype == 'PIEZO' .and. eigenvalue%calc .eqv. .false.) then
+    if ( (antype == 'PIEZO') .and. (eigenvalue%calc .eqv. .false.)) then
        num_nod_vars = 4
        var_names(1) = "DISPLX"
        var_names(2) = "DISPLY"
        var_names(3) = "DISPLZ"
        var_names(4) = "POT"
 
-    elseif(eigenvalue%calc) then
+    elseif((antype == 'EIGEN')) then
        num_nod_vars = 3
        var_names(1) = "DISPLX"
        var_names(2) = "DISPLY"
@@ -211,7 +211,7 @@ CONTAINS
           ! updata exodus-file. This also flush netCDF I/O buffer., s.3 as3
           call exupda (exoid, ierr)
        end do
-    else if(eigenvalue%calc) then
+    else if((antype == 'EIGEN')) then
        num_time_steps = size(eigenval,1) ! number of converged eigenvalues
        do i = 1, num_time_steps
           time =  SQRT(eigenval(i,1))/(2*pi)!egenfrekvens. Kun real-part
@@ -419,7 +419,7 @@ CONTAINS
        var_names(3) = "DISPLZ"
        var_names(4) = "POT"
 
-    elseif(eigenvalue%calc) then
+    elseif(antype == 'EIGEN') then
        num_nod_vars = 3
        var_names(1) = "DISPLX"
        var_names(2) = "DISPLY"
@@ -430,7 +430,7 @@ CONTAINS
        var_names(1) = "DISPLX"
        var_names(2) = "DISPLY"
        var_names(3) = "DISPLZ"
-    else if( antype == 'TOPSTRUCT' ) then
+    else if( (antype == 'TOPSTRUCT') .or. (antype == 'TOPSTRUCT_EIGEN') ) then
        num_nod_vars = 3
        var_names(1) = "DISPLX"
        var_names(2) = "DISPLY"

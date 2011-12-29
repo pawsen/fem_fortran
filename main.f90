@@ -23,7 +23,7 @@ program main
   real(8), dimension(:) ,pointer :: sweep
   real(8), allocatable, dimension(:) :: rho
 
-  mat_vec(13) = 1! eet lag som standard
+  mat_vec(13) = 1! eet lag som standard ved laminater
   call read_antype(sweep)
   if ( ((elem_type == 'PLATE_GMSH').or.(elem_type == 'PLANE_GMSH'))) then
   ! &.and.( antype == 'PIEZO')) then
@@ -33,7 +33,7 @@ program main
      call input
   end if
 
-  read_rho = 0 ! 0: fra	1: indlï¿½s rho fra fil ifm beregning af displ/varmefordeling
+  read_rho = 0 ! 0: fra	1: indlæs rho fra fil ifm beregning af displ/varmefordeling
   if (read_rho == 1) then
      allocate(rho(ne))
      call rho_input(rho,trim(filename)//'dir/'//trim(filename)//'_rho'//'.m') !linux_fejl
@@ -65,15 +65,15 @@ program main
      else
         call displ(flag)
      end if
-  else if (eigenvalue%calc) then
+  else if (antype == 'EIGEN') then
      ! calculate eigenvalues and modeshapes
      if (elem_type == 'PLATE_GMSH') then
-        call initial_piezo
-        call arpack_init
+        !call initial_piezo
+        call initial_plate
      else
         call initial_fea
-        call arpack_init
      end if
+     call arpack_init
   else if (antype == 'PIEZO') then
      !harmonic = .true.
      print*,'Harmonic= ', harmonic
@@ -85,7 +85,11 @@ program main
         call displ_piezo(flag)
      end if
   else if (antype == 'TOPSTRUCT_EIGEN') then
-     call initial_piezo
+     if (elem_type == 'PLATE_GMSH') then
+        call initial_plate
+     else
+        call initial_fea
+     end if
      call TopOpt(flag)
   else if (antype == 'NONLIN') then
      ! Displacement for geometric nonlinear problems.

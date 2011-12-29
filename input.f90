@@ -682,10 +682,10 @@ CONTAINS
 
     allocate(eigenvalue)
     eigenvalue%calc = .false.
-    eigenvalue%shift = .false.
+    eigenvalue%shift = .true.! we use shift as standard. Much better for finding smallest eigenvalues
 
     elem_type = ' ' ! for checking if elem_type is read from para-file
-    print*,'antyr_read'
+    print*,'antype_read'
 
     ! bestem filename
     call open_file(10,'.msh')
@@ -719,6 +719,9 @@ CONTAINS
              antype = 'STATIC'
           ELSEIF (cvalue == 'PIEZO' .OR. cvalue == 'piezo') THEN
              antype = 'PIEZO'
+          ELSEIF (cvalue == 'EIGEN' .OR. cvalue == 'eigen') THEN
+             antype = 'EIGEN'
+             eigenvalue%calc = .true.
           ELSEIF (cvalue == 'NONLIN' .OR. cvalue == 'nonlin') THEN
              antype = 'NONLIN'
           ELSEIF (cvalue == 'MODAL' .OR. cvalue == 'modal') THEN
@@ -739,6 +742,7 @@ CONTAINS
              antype = 'TOPTHERM'
           ELSEIF (cvalue == 'TOPSTRUCT_EIGEN' .OR. cvalue == 'topstruct_eigen') THEN
              antype = 'TOPSTRUCT_EIGEN'
+             eigenvalue%calc = .true.
           ELSEIF (cvalue == 'TOPSTRUCT' .OR. cvalue == 'topstruct') THEN
              antype = 'TOPSTRUCT'
           ELSEIF (cvalue == 'TOPTHERMSTRUCT' .OR. cvalue == 'topthermstruct') THEN
@@ -794,6 +798,12 @@ CONTAINS
           READ (10, *) command, ivalue
           if (ivalue == 1) then
              eigenvalue%calc = .true.
+          end if
+       ELSEIF (command == 'SHIFT' .OR. command == 'shift') THEN
+          BACKSPACE (10)
+          READ (10, *) command, ivalue
+          if (ivalue == 0) then
+             eigenvalue%shift = .false.
           end if
        end IF
     end do

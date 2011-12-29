@@ -27,10 +27,6 @@ contains
     !      integer, allocatable, dimension(:) :: iK, jK
     real(8), allocatable, dimension(:) :: pp!sK, p
 
-    n = size(pZ,1)
-    nz = size(iK,1)
-    print*,'n: ',n
-
 
     CALL MPI_INIT(IERR)
     id%COMM = MPI_COMM_WORLD
@@ -40,8 +36,8 @@ contains
     
     CALL ZMUMPS(id)
     IF ( id%MYID .eq. 0 ) THEN
-       id%N = n
-       id%NZ = nz
+       id%N = neqn_nb
+       id%NZ = size(iK,1)
 
        ! point to stiffness vectors
        id%IRN => iK
@@ -156,7 +152,7 @@ contains
 
     CALL ZMUMPS(id)
     IF ( id%MYID .eq. 0 ) THEN
-       id%N = size(pZ,1)
+       id%N = neqn_nb
        id%NZ = size(iK,1)
        ! point to stiffness vectors
        id%IRN => iK

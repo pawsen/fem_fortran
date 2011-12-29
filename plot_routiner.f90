@@ -20,7 +20,6 @@ MODULE plot_routiner
 
 CONTAINS
 
-
   subroutine output_anim(Dcurr,n,plotval) !gemmer forskydninger og sp�ndinger for hvert kald. Til animation
 
     ! udskriver displ og stress/strain for hvert tidsskridt

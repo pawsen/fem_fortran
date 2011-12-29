@@ -34,18 +34,19 @@ contains
 
     if (elem_type == 'PLATE') then
        neqn = 3*nn
+       neqn_nb = neqn+nn+nb
        dof = 12 ! mechanical dof for one element
        nzz = (dof*dof+4*4)*ne+2*4*dof*ne+2*nb
-       !nzz = (dof*dof)*ne+2*nb
-
-    else if ((elem_type == 'PLATE_GMSH' .and. eigenvalue%calc) .or. &
+    else if ( ((elem_type == 'PLATE_GMSH') .and. eigenvalue%calc) .or. &
         ( antype == 'TOPSTRUCT_EIGEN') ) then
        neqn = 3*nn
-       dof = 12   
+       neqn_nb = neqn
+       dof = 12
        nzz = 12*12*ne
     else if (elem_type == 'PLATE_GMSH' .and. eigenvalue%calc .eqv. .false.)then
        neqn = 3*nn
-       dof = 12 
+       neqn_nb = neqn+nn+nb
+       dof = 12
        nzz = (dof*dof+4*4)*ne_ptz+2*4*dof*ne_ptz+& ! ptz-material
             (12*12+4*4)*(ne-ne_ptz) + & ! non-ptz material
             2*nb !RB
@@ -53,29 +54,41 @@ contains
        !nb =  114
        !pcb = 158976
        !tot = 167282
-    else
+    else !plane
        dof = 8
        neqn = 2*nn
+       neqn_nb = neqn +nn+nb
        nzz = (8*8+4*4)*ne+2*4*8*ne+2*nb
 
     end if
 
     if (harmonic) then
-       allocate(sKZ(nzz), dZ(neqn+nn+nb),pZ(neqn+nn+nb))
+       allocate(sKZ(nzz))
        sKZ = CMPLX(0d0,0d0)
-       dZ = CMPLX(0d0,0d0)
-       pZ = CMPLX(0d0,0d0)
+
+       if (antype /= 'EIGEN') then
+          allocate(dZ(neqn+nn+nb),pZ(neqn+nn+nb))
+          dZ = CMPLX(0d0,0d0)
+          pZ = CMPLX(0d0,0d0)
+       end if
     else
-       allocate(sK(nzz), d(neqn+nn+nb),p(neqn+nn+nb))
+       allocate(sK(nzz))
        sK = 0d0
-       d = 0d0
-       p = 0d0
+
+       if (antype /= 'EIGEN') then
+          allocate(d(neqn+nn+nb),p(neqn+nn+nb))
+          d = 0d0
+          p = 0d0
+       end if
     end if
 
     allocate(iK(nzz),jK(nzz))
-    allocate (strain(ne, 5), stress(ne, 5))
     iK = 0
     jk = 0
+
+    if (antype /= 'EIGEN') then
+       allocate (strain(ne, 5), stress(ne, 5))
+    end if
 
 
   end subroutine initial_piezo

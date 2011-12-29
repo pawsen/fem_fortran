@@ -2,13 +2,13 @@ module plate
 
   implicit none
 
-  private :: buildstiff, enforce, recover, rb_init_plate, load_init_plate
+  private :: enforce, recover, rb_init_plate, load_init_plate
   private :: size_of_stucture
-  public :: displ_plate, initial_plate, buildload_plate
+  public :: displ_plate, initial_plate, buildload_plate, buildstiff_plate
 
 contains
 
-  subroutine initial_plate(plate_type)
+  subroutine initial_plate!(plate_type)
 
     ! This subroutine is mainly used to allocate vectors and matrices
     use fedata
@@ -17,23 +17,24 @@ contains
     use mindlin42
     use file_init
     
-    integer, intent(in) :: plate_type
+    !integer, intent(in) :: plate_type
     integer :: e, nen, bw_e, nzz
     integer:: rand_int(4), int_dummy(11)
     real(8) ::  rand_val(4), real_dummy(7)
 
     integer, parameter :: mdim = 12
+    integer:: plate_type = 2
 
     ! add rb along one of the sides
 
     call parameter_input(real_dummy,int_dummy,rand_int,rand_val)
     call rb_init_plate(rand_int,rand_val)
     !call load_init_plate ! inspænder plade langs randen og giver jævnt fordelt last på fladen
-
-
+    
+    
     ! This subroutine computes the number of global equation,
     ! half bandwidth, etc and allocates global arrays.
-
+    
     ! Calculate number of equations
     neqn = 3*nn
 
@@ -54,27 +55,37 @@ contains
     end if
 
     if(banded == 2) then ! sparse
-
        !12*12*ne is the number of times the local stiffness matrix adds a value to the global(including dublicates, eg. is't not nz(number of non-zeros)). Because of lagrangien multiplier there is added xtra two non-zero entries for each RB
-       nzz = 12*12*ne+2*nb 
+
+       if ( (eigenvalue%calc .and.  (eigenvalue%shift .eqv. .false.)) ) then
+          nzz = 12*12*ne
+          neqn_nb = neqn
+       else
+          nzz = 12*12*ne+2*nb
+          neqn_nb = neqn+nb
+       end if
+
        allocate(iK(nzz),jK(nzz),sK(nzz))
-       allocate (p(neqn+nb), d(neqn+nb))
+
+       if (.not. eigenvalue%calc) then
+          allocate (p(neqn+nb), d(neqn+nb))
+       end if
     else
        allocate (p(neqn), d(neqn))
     end if
 
+    if (.not. eigenvalue%calc) then
+       select case(plate_type)
+       case (1)!kirchhoff
+          allocate (strain(ne, 3), stress(ne, 3))
+       case (2) !mindlin
+          allocate (strain(ne, 5), stress(ne, 5))
+       end select
 
-    select case(plate_type)
-    case (1)!kirchhoff
-       allocate (strain(ne, 3), stress(ne, 3))
-    case (2) !mindlin
-       allocate (strain(ne, 5), stress(ne, 5))
-    end select
-
-    ! MODIFIED FOR WINDOWS COMPILER
-    strain = 0d0
-    stress = 0d0
-
+       ! MODIFIED FOR WINDOWS COMPILER
+       strain = 0d0
+       stress = 0d0
+    end if
   end subroutine initial_plate
 
   subroutine displ_plate
@@ -93,13 +104,13 @@ contains
     !1 = kirchhoff, 2 = mindlin
     plate_type = 2
 
-    call initial_plate(plate_type)
+    call initial_plate
 
     ! Build load-vector
     call buildload_plate
 
     ! Build stiffness matrix
-    call buildstiff(plate_type)
+    call buildstiff_plate
 
     ! Remove rigid body modes
     call enforce
@@ -142,6 +153,7 @@ contains
     use fedata
     use plate41rect
     use mindlin42
+    use numeth, only : get_edof
     
     integer :: i, j, e, nen, pdof, eface
     integer, parameter :: mdim = 12
@@ -168,32 +180,23 @@ contains
           eface = loads(i,3)
           thk   = mprop(element(e)%mat)%thk
 
-          ! Find coordinates and degrees of freedom
-          do j = 1, nen
-             xe(2*j-1) = x(element(e)%ix(j),1)
-             xe(2*j) = x(element(e)%ix(j),2)
+          call get_edof(e,nen,xe,edof=edof)
 
-             edof(3*j-2) = 3 * element(e)%ix(j) - 2 
-             edof(3*j-1) = 3 * element(e)%ix(j) - 1
-             edof(3*j)   = 3 * element(e)%ix(j)
-          end do
-
-          ! der er ikke forskel pÃ¥ hvordan lastvektoren laves, nÃ¥r det er mindlin eller kirchhoff plade. !!! JO DER ER!!!
-          ! Derfor kaldes kun mindlin.
+          ! NB der er forskel på hvordan lastvektoren laves, alt efter om det er mindlin eller kirchoff. Derfor virker nedenstående kun for mindlin!
           call mindlin42_re(xe,eface,fe,thk,re)
 
           p(edof) = p(edof) + re    
        else
           print *, 'Error in plate/buildload' 
           print *, 'Load type not known'
-          stop
+          error stop
        end if
     end do
 
   end subroutine buildload_plate
 
 
-  subroutine buildstiff(plate_type)
+  subroutine buildstiff_plate(rho,rho_min)
 
     ! This subroutine builds the global stiffness matrix from
     ! the local element stiffness matrices.
@@ -201,17 +204,21 @@ contains
     use fedata
     use plate41rect
     use mindlin42
+    use fea, only : assemble_sparse
+    use numeth, only : get_edof
 
-    integer, intent(IN):: plate_type
-    integer :: e, i, j, ii
+    !integer, intent(IN):: plate_type
+    real(8), optional, INTENT(IN) :: rho_min, rho(:)
+    integer :: e, i, j, ii, jj
     integer :: nen, idof
-    integer, parameter :: mdim = 12
+    integer, parameter :: mdim = 12, kk = 3
     integer, dimension(mdim) :: edof
     ! Remember that dimension of xe is only dependent on problem
     !  type(2d/3d), and not DOF pr node.
     real(8), dimension(8) :: xe
     real(8), dimension(mdim, mdim) :: ke, me
-    real(8) :: young, nu, area, dens, thk, shear
+    real(8) :: young, nu, dens, thk, shear
+    integer, parameter :: plate_type = 2
 
     ! Reset stiffness matrix
     if ( banded == 0) then
@@ -221,19 +228,11 @@ contains
     end if
 
     ii = 0! sparse
+    jj = 0
     
     do e = 1, ne
 
-       ! Find coordinates and degrees of freedom
-       nen = element(e)%numnode
-       do i = 1, nen
-          xe(2*i-1) = x(element(e)%ix(i),1)
-          xe(2*i) = x(element(e)%ix(i),2)
-
-          edof(3*i-2) = 3 * element(e)%ix(i) - 2 
-          edof(3*i-1) = 3 * element(e)%ix(i) - 1
-          edof(3*i)   = 3 * element(e)%ix(i)
-       end do
+       call get_edof(e,nen,xe,edof=edof)
 
        ! calculate plate41 element stiffness matrix here
        young = mprop(element(e)%mat)%young
@@ -246,20 +245,8 @@ contains
           call plate41rect_ke(xe, young, nu, thk, ke)
        case (2)
           shear = mprop(element(e)%mat)%shear
-
-          ! the number in the call change between mechanical and
-          !  piezo plate
           call mindlin42_ke(xe, young, nu, dens, thk, shear,ng, ke,1,mat_vec) !type = 1
-
        end select
-
-!!$       if (e==1) then
-!!$          print*,'test'
-!!$          do i=1,12
-!!$             print*,(ke(i,j),j=1,12)
-!!$             !write (*,'(8(D10.4 2x))') (real(ke_stiff(i,j)),j=1,8)
-!!$          end do
-!!$       end if
 
        ! Building global stiffness matrix
        if ( banded == 0) then
@@ -275,25 +262,17 @@ contains
           end do
 
        elseif (banded == 2) then
-          do i = 1, 3*nen
-             do j =1, 3*nen
-                ii = ii+1
-                iK(ii) = edof(i)
-                jK(ii) = edof(j)
-                sK(ii) = ke(i,j)
-             end do
-          end do
+          if (present(rho) .and. ((element(e)%mat /= elem_id))) then
+             call assemble_sparse(nen,kk,ii,edof,ke,jj,rho,rho_min)
+          else
+             call assemble_sparse(nen,kk,ii,edof,ke)
+          end if
        end if
 
     end do
 
-!!$    do e = 1,ii
-!!$       print*,e,iK(e),jK(e),sK(e)
-!!$    end do
-!!$
-    print*,'nb',nb
-
-    if ( banded == 2)  then!add values from lagrangian multipliers
+    !add values from lagrangian multipliers
+    if ( banded == 2 .and. ((antype /= 'EIGEN') .or. eigenvalue%shift)) then
        do i=1,nb
           ! UPS: bound(i,3) is used both for temp and moments for
           !  plates. Stupid!
@@ -312,7 +291,7 @@ contains
 
     end if
 
-  end subroutine buildstiff
+  end subroutine buildstiff_plate
 
   subroutine enforce
 

@@ -8,9 +8,12 @@ module numeth
    private
    public :: factor, solve, bfactor, bsolve, vector_mul, gauss_points
    public :: index_dups, rotation_matrix, sparse_multiply, inv_matrix
-   public :: correct_bound_vector, get_edof
+   public :: correct_bound_vector, get_edof, lapack_eigenval
 
    public :: make_dir
+
+   !print to screen
+   PUBLIC :: display_matrix
 
 contains
 
@@ -337,7 +340,9 @@ END SUBROUTINE gauss_points
 
 
   Function Inv_matrix(a) result(ainv) 
-    implicit none 
+    implicit none
+
+    ! Bruger LAPACK
     !Fra http://www.megasolutions.net/fortran/Inverse-of-a-square-matrix-35510.aspx
     !En anden kode der ikke bruger lapack er http://www.dreamincode.net/code/snippet1272.htm
 
@@ -433,6 +438,136 @@ END SUBROUTINE gauss_points
     end do
 
   end subroutine get_edof
+
+
+  subroutine lapack_eigenval(mat,eigenval)
+    ! this subroutine calculates eigenvalue and vectors of a symmetric matrix (standard eigenvalue problem). It uses dsyev.f from LAPACK
+    
+    !
+    !  DSYEV Example.
+    !  ==============
+    ! From http://software.intel.com/sites/products/documentation/hpc/mkl/lapack/mkl_lapack_examples/dsyev_ex.f.htm
+    !
+    !  Program computes all eigenvalues and eigenvectors of a real symmetric
+    !  matrix A:
+    !
+    !  mat(1,:) = [ 1.96,-6.49, -0.47, -7.20, -0.65]
+    !  mat(2,:) = [-6.49, 3.80, -6.39,  1.50, -6.34]
+    !  mat(3,:) = [-0.47,-6.39,  4.17, -1.51,  2.67]
+    !  mat(4,:) = [-7.20, 1.50, -1.51,  5.70,  1.80]
+    !  mat(5,:) = [-0.65,-6.34,  2.67,  1.80, -7.10]
+    !
+    !  Description.
+    !  ============
+    !
+    !  The routine computes all eigenvalues and, optionally, eigenvectors of an
+    !  n-by-n real symmetric matrix A. The eigenvector v(j) of A satisfies
+    !
+    !  A*v(j) = lambda(j)*v(j)
+    !
+    !  where lambda(j) is its eigenvalue. The computed eigenvectors are
+    !  orthonormal.
+    !
+    !  Example Program Results.
+    !  ========================
+    !
+    ! DSYEV Example Program Results
+    !
+    ! Eigenvalues
+    ! -11.07  -6.23   0.86   8.87  16.09
+    !
+    ! Eigenvectors (stored columnwise)
+    !  -0.30  -0.61   0.40  -0.37   0.49
+    !  -0.51  -0.29  -0.41  -0.36  -0.61
+    !  -0.08  -0.38  -0.66   0.50   0.40
+    !   0.00  -0.45   0.46   0.62  -0.46
+    !  -0.80   0.45   0.17   0.31   0.16
+
+    real(8), intent(inout) :: mat(:,:)
+    real(8), intent(out) :: eigenval(:)
+    !real(8) :: mat(5,5), eigenval(5), eigenvec(5,5)
+
+    external :: DSYEV
+    integer :: n, lda, lwork,info,i,j
+    character :: jobz*1, uplo*1
+    integer,parameter :: LWMAX = 1000
+    real(8) :: work(LWMAX)
+    real(8), allocatable :: A(:,:), W(:)
+
+
+    jobz = 'V' !compute both eigenvalues and vectors
+    uplo = 'U' !upper triangle of A is stored
+    N    = size(mat,2)   !dimension of A 
+    LDA  = N   !The leading dimension of the array A.  LDA >= max(1,N)
+    LWORK= -1
+    
+    allocate(A(N,N),W(N))
+    A = mat
+    
+    ! If mat i not completely symmetric(due to numerical errors), we can do:
+    !A = 0.5d0 * (A + TRANSPOSE(A))
+
+    ! Make A as an upper diagonal matrix
+    do i=1,N
+       do j=1,N
+          if (i>j) then
+             A(i,j) = 0d0
+          end if
+       end do
+    end do
+
+    !call DISPLAY_MATRIX( 'eigenvec', A )
+
+    !Query the optimal workspace.
+    call DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
+    LWORK = MIN( LWMAX, INT( WORK( 1 ) ) )
+
+    !Solve eigenproblem.
+    call DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
+
+    if (info < 0) then
+       print*,'if INFO = -i, the i-th argument had an illegal value'
+       error stop
+    elseif (info > 0) then
+       print*,' if INFO = i, the algorithm failed to converge; i'
+       print*,'         off-diagonal elements of an intermediate tridiagonal'
+       print*,'         form did not converge to zero.'
+       error stop
+    end if
+
+    !call DISPLAY_MATRIX( 'eigenvec', A )
+
+    eigenval = W
+    mat = A
+    !eigenvec = A
+    
+  end subroutine lapack_eigenval
+
+  SUBROUTINE DISPLAY_MATRIX( title, A )
+
+    character(len=*), intent(in) :: title
+    REAL(8), intent(in) ::A(:,:)
+    INTEGER:: i,j,ii
+
+    ii = size(A,2)
+
+    WRITE(*,*)
+    WRITE(*,*) title
+    DO I = 1, ii
+       print*,(A(i,j),j=1,size(A,1))
+       !WRITE(*,9998) ( A( I, J ), J = 1, size(A,1) )
+    END DO
+
+9998 FORMAT( 11(:,1X,f6.2) )
+    RETURN
+
+    ! !Another way to print the matrix
+    ! do i=1,12
+    !    print*,(ke_piezo(i,j),j=1,4)
+    !    !write (*,'(8(D10.4 2x))') (real(ke_stiff(i,j)),j=1,8)
+    ! end do
+
+  END SUBROUTINE DISPLAY_MATRIX
 
 end module numeth
 
