@@ -33,7 +33,7 @@ module fedata
    
    ! Working arrays:
    real(8), dimension(:,:), allocatable :: k, strain, stress
-   real(8), dimension(:), allocatable :: d
+   real(8), dimension(:), allocatable, target :: d
    real(8), dimension(:), allocatable, target :: p
 
    ! Thermal added d_28_4_11 for thermal
@@ -43,9 +43,10 @@ module fedata
 
    ! i/o
    character(len = 20) :: filename
+   character(len = 40) :: filename_out, dir_out
    logical, parameter :: plot2screen = .true.
 
-   character(len = 20) :: antype, elem_type
+   character(len = 40) :: antype, elem_type
 
    ! Constants
    real(8), parameter ::  pi = 3.1415927 
@@ -106,6 +107,7 @@ module fedata
    type eigenvalue_def
       logical :: calc, shift
       real(8) :: sigma
+      integer :: n_eigen
    end type eigenvalue_def
    type(eigenvalue_def),  allocatable :: eigenvalue
 

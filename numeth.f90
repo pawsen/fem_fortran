@@ -257,10 +257,18 @@ END SUBROUTINE gauss_points
     CHARACTER :: delimiter
     logical :: exist
 
-    CALL get_environment_variable('DELIMITER',delimiter) ! find ud af om '/' eller '\' skal bruges ved mapper
+    !CALL get_environment_variable('DELIMITER',delimiter) ! find ud af om '/' eller '\' skal bruges ved mapper
+    ! kræver at variablen DELIMITER eksistere. Fx på linux: export DELIMITER='/'
     !find out if folder exist by checking for . in the folder. Works on windows/unix/mac
-    !INQUIRE(file=trim(filename)//'dir/'//'.',EXIST=exist)
-    INQUIRE(file=trim(filename)//'dir'//delimiter//'.',EXIST=exist)
+    !http://www.rhinocerus.net/forum/lang-fortran/354299-how-determine-whether-not-there-exists-directory.html
+
+    !INQUIRE (DIRECTORY=trim(filename)//'dir',EXIST=exist) ! virker med ifort, men ikke gfortran
+    INQUIRE(file='./'//trim(filename)//'dir/'//'.',EXIST=exist)
+    !INQUIRE(file=trim(filename)//'dir'//delimiter//'.',EXIST=exist)
+
+    ! print*
+    ! print*,delimiter
+    ! print*
 
     if (.not. exist) then
        CALL system('mkdir '//trim(filename)//'dir') ! make new directory

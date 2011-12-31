@@ -86,6 +86,8 @@ contains
        strain = 0d0
        stress = 0d0
     end if
+
+    print*,'total DOF',neqn
   end subroutine initial_plate
 
   subroutine displ_plate

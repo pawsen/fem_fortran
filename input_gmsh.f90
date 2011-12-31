@@ -150,13 +150,13 @@ CONTAINS
           case(10000) ! gnd
              bound_buf(nb-1:nb,3) = gnd ! V =0
              bound_buf(nb-1:nb,2) = 10 ! id
-          case(10002) ! cos
+          case(10001) ! cos
              !potential is read from para-file
              bound_buf(nb-1:nb,3) = potential
-             bound_buf(nb-1:nb,2) = 12
-          case(10001) ! sin
-             bound_buf(nb-1:nb,3) = potential
              bound_buf(nb-1:nb,2) = 11
+          case(10002) ! sin
+             bound_buf(nb-1:nb,3) = potential
+             bound_buf(nb-1:nb,2) = 12
           case(10005) ! RB, UX/UZ=0
              bound_buf(nb-1:nb,3) = 0 ! prescribed value
              bound_buf(nb-1:nb,2) = 1 !UZ/UX

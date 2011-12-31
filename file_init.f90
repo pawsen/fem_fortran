@@ -12,7 +12,7 @@ CONTAINS
        ,rho,n_iter,nmax,deltaT,cL,young1,dens1,nu1,young2,dens2,nu2)
 
    use transient !udkommenteret d. 21/10. Uden at vide hvad konsekvensen er
-
+   use plot_routiner, only : output_vector
 
     integer, INTENT(INOUT) :: file,rand,normal, loes_type,output_type
     real(8), intent(IN) :: rho(:)
@@ -333,28 +333,6 @@ CONTAINS
 
   end subroutine parameter_input_transient
 
-  subroutine output_vector(vec,title)
-    use fedata
-    ! Udskriver en vektor til matlab, fx compliance.
-
-    real(8), dimension(:), INTENT(IN) :: vec
-    character(len=*), intent(in) :: title
-    integer :: i
-
-    CALL system('mkdir '//trim(filename)//'dir') ! make new directory
-
-    open (14, file = trim(filename)//'dir/'//trim(title)//'.m')
-    write(14,*) '% Konvergens af objektfunktionen'
-    write(14,*) 'vec=['
-    do i = 1,size(vec,1)
-       write(14,*) vec(i)
-    end do
-    write(14,*) '];'
-    close(14)
-
-  end subroutine output_vector
-
-  !¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤
 
   subroutine inputfile(file,filter_type,solver_type,problem_type,vol_type,rmin_type,info,save_rho,n_iter,&
        stop_krit,animation,penal,damp_fact,max_vol,rmin,rho_min,tol,movelimit)

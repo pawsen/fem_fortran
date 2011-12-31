@@ -671,7 +671,7 @@ CONTAINS
     logical :: fnexist
     character(len = 40) :: cvalue
     real(8) :: rvalue
-    integer :: ivalue
+    integer :: ivalue, ivalue2(2), i
 
     allocate(sweep(3))
     ! DEFAULT values
@@ -683,6 +683,7 @@ CONTAINS
     allocate(eigenvalue)
     eigenvalue%calc = .false.
     eigenvalue%shift = .true.! we use shift as standard. Much better for finding smallest eigenvalues
+    eigenvalue%n_eigen = 10 ! default number of eigenvalues to calculate
 
     elem_type = ' ' ! for checking if elem_type is read from para-file
     print*,'antype_read'
@@ -706,6 +707,17 @@ CONTAINS
        return
     endif
 
+    !clear output file if exist. Needed because we use append(write to bottom of file) for writing to the file in all other writing commands
+    dir_out = trim(filename)//'dir/'
+    filename_out = trim(dir_out)//trim(filename)
+    inquire(file = trim(filename_out)//'.out', exist = fnexist)
+    if (fnexist) then
+       open (10, file = trim(filename_out)//'.out')
+       write(10,'()') ! clear file
+       close (10)
+    end if
+    
+
     open (10, file = trim(rho_filename))
     do
        read (10, *) command
@@ -719,6 +731,9 @@ CONTAINS
              antype = 'STATIC'
           ELSEIF (cvalue == 'PIEZO' .OR. cvalue == 'piezo') THEN
              antype = 'PIEZO'
+          ELSEIF (cvalue == 'RATIO_LENGTH_THICKNESS' .OR. &
+               (cvalue == 'ratio_length_thickness')) THEN
+             antype = 'RATIO_LENGTH_THICKNESS'
           ELSEIF (cvalue == 'EIGEN' .OR. cvalue == 'eigen') THEN
              antype = 'EIGEN'
              eigenvalue%calc = .true.
@@ -787,23 +802,23 @@ CONTAINS
           if (sweep(3) == 1) then
              harmonic = .true. !has to be harmonic because the harmonic bool is used to initialize complex system vectors
           end if
-       ELSEIF (command == 'SWEEP_BOOL' .OR. command == 'sweep_bool') THEN
-          BACKSPACE (10)    
-          READ (10, *) command, sweep(3)
-          if (sweep(3) == 1) then
-             harmonic = .true. !has to be harmonic because the harmonic bool is used to initialize complex system vectors
-          end if
        ELSEIF (command == 'EIGENVALUE' .OR. command == 'eigenvalue') THEN
           BACKSPACE (10)
           READ (10, *) command, ivalue
-          if (ivalue == 1) then
-             eigenvalue%calc = .true.
-          end if
+          !if (ivalue == 1) then
+          !eigenvalue%calc = .true.
+          eigenvalue%n_eigen = ivalue
+          !end if
        ELSEIF (command == 'SHIFT' .OR. command == 'shift') THEN
           BACKSPACE (10)
           READ (10, *) command, ivalue
+          ! We use shift as standard.
           if (ivalue == 0) then
              eigenvalue%shift = .false.
+          else !read shift value
+             BACKSPACE (10)
+             READ (10, *) command, ivalue, rvalue
+             eigenvalue%sigma = AINT(rvalue,8) ! round the shift value towards zero
           end if
        end IF
     end do

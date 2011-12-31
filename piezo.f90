@@ -85,6 +85,9 @@ contains
     allocate(iK(nzz),jK(nzz))
     iK = 0
     jk = 0
+    print*,'Mechanical DOF', neqn
+    print*,'Mechanical DOF + Elec DOF', neqn+nn
+
 
     if (antype /= 'EIGEN') then
        allocate (strain(ne, 5), stress(ne, 5))
@@ -93,7 +96,7 @@ contains
 
   end subroutine initial_piezo
 
-  subroutine displ_piezo(flag,rho,rho_min)
+  subroutine displ_piezo(flag,rho,rho_min,plot_bool)
 
     ! This subroutine calculates displacements
     use numeth
@@ -111,6 +114,7 @@ contains
     integer, INTENT(IN) :: flag
     real(8), optional, dimension(:), INTENT(IN) :: rho
     real(8), optional, INTENT(INOUT) :: rho_min
+    logical, optional, intent(in) :: plot_bool
 
     integer :: e, rand_int(4), int_dummy(11), flagger
     real(8) :: plotval(ne), rand_val(4), real_dummy(7), omega,frekvens
@@ -128,7 +132,8 @@ contains
        call enforce_piezo
        call mumps_solve_complex
 
-       call output_deformed('Deformeret','potentiale',(/0d0/),dZ(neqn+1:neqn+nn))
+       ! .m file for matlab
+       !call output_deformed('Deformeret','potentiale',(/0d0/),dZ(neqn+1:neqn+nn))
     else
 
        if (element(1)%id  == 2) then ! plane42
@@ -139,18 +144,14 @@ contains
        call buildstiff_piezo(flagger)
        ! Remove rigid body modes
        call enforce_piezo
-
+       
+       d = p
        call mumps_init_real
        call mumps_solve_real(6)
        call mumps_finalize_real
 
-       call output_deformed('Deformeret','potentiale',d(neqn+1:neqn+nn))
+       !call output_deformed('Deformeret','potentiale',d(neqn+1:neqn+nn))
     end if
-
-    call exodus_write
-
-    call output(2)
-
 
     !    call output
     if (present(rho)) then
@@ -159,6 +160,11 @@ contains
        call output_elements('', plotval)
        call plot('elements', 'xwin', 'color', 'spaendingsintensitet', plotval)
        call plot('deformed', 'xwin', 'color', 'deformeret',rho)
+    else
+       if (.not. present(plot_bool)) then
+          call exodus_write
+          call output(2)
+       end if
     endif
 
   end subroutine displ_piezo
@@ -625,7 +631,7 @@ contains
     ke_dielectric = 0d0
     ke_piezo_transpose = 0d0
     me = 0d0
-    ce = 0.0
+    ce = 0d0
 
     ii = 0
     do e = 1, ne
@@ -822,13 +828,56 @@ contains
   END SUBROUTINE sweep_piezo
 
 
-  subroutine pade_approx_piezo
+  subroutine ratio_length_thickness
+    !this subroutine solves an piezo-electric problem by varying the layer thickness
+    !Used to compare the maximum deflection with Henriks comsol model
 
 
+    use fedata
+    use plot_routiner
 
+    integer :: i, n_iter
+    real(8), allocatable :: thickness(:)
+    character(len=2) :: str
+    
+    n_iter = 16
+    allocate(thickness(n_iter))
 
-  end subroutine pade_approx_piezo
+    !
+    do i=1,n_iter
+       thickness(i) = 0.05d0*i
+       mprop(1)%thk = thickness(i) ! total thickness
+       !layer thickness
+       mat_vec(14) = thickness(i)/3d0
+       mat_vec(15) = thickness(i)/3d0
+       mat_vec(16) = thickness(i)/3d0
+      
+       
+       ! solve the problem with different thickness
+       call displ_piezo(0,plot_bool=.true.)
+       
+       !save deflection in .m file
+       write(str,'(I2)') i
+       call output_vector(d(1:neqn:3),'thickness_'//trim(adjustl(str)))
+    end do
+    call output_vector(thickness,'thickness')
 
+  end subroutine ratio_length_thickness
 
+  subroutine inverse_sparse
 
+    use fedata
+    use solve_handle_real
+
+    integer :: i
+
+    call mumps_init_real
+    call mumps_solve_real(4)!factorize
+
+    do i=1,nn
+       call mumps_solve_real(4)
+    end do
+
+  end subroutine inverse_sparse
+  
 end module piezo

@@ -72,7 +72,6 @@ CONTAINS
     top_vol = 0.0
     IYFREE = 0
 
-
     if (.not. present(movelimit_in)) then
        movelimit = 0.2d0
     else

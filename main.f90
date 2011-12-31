@@ -79,11 +79,15 @@ program main
      print*,'Harmonic= ', harmonic
 
      call initial_piezo
-     if (harmonic) then
+     if (sweep(3) == 1) then
         call sweep_piezo(0,(/0d0/),sweep)
      else
         call displ_piezo(flag)
      end if
+  else if (antype == 'RATIO_LENGTH_THICKNESS') then
+     print*,'Harmonic= ', harmonic
+     call initial_piezo
+     call ratio_length_thickness
   else if (antype == 'TOPSTRUCT_EIGEN') then
      if (elem_type == 'PLATE_GMSH') then
         call initial_plate

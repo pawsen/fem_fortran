@@ -18,6 +18,9 @@ MODULE plot_routiner
   ! animation mv
   PUBLIC :: output_anim, output_1DOF,output_data, output_center, plot_gauss
 
+  !.out file
+  PUBLIC :: write_vec_out
+
 CONTAINS
 
   subroutine output_anim(Dcurr,n,plotval) !gemmer forskydninger og sp�ndinger for hvert kald. Til animation
@@ -143,7 +146,7 @@ CONTAINS
 
     call make_dir
 
-    open (14, file = trim(filename)//'dir/'//trim(title)//'.m')
+    open (14, file = trim(dir_out)//trim(title)//'.m')
     write(14,*) '% Konvergens af objektfunktionen'
     write(14,*) 'vec=['
 	do i = 1,size(vec,1)
@@ -163,8 +166,8 @@ CONTAINS
 
     call make_dir
 
-    ! write datafile     
-    open (13, file = trim(filename)//'dir/'//trim(title)//'.m')
+    ! write datafile  
+    open (13, file = trim(filename_out)//'.m')
 
     ! write matrix
     write(13,'("mat = [")')
@@ -195,7 +198,7 @@ CONTAINS
     end if
 
     ! write datafile     
-    open (13, file = trim(filename)//'dir/'//trim(title)//'.m')
+    open (13, file = trim(filename_out)//'.m')
 
     ! write matrix
     write(13,'("mat = [")')
@@ -222,8 +225,7 @@ CONTAINS
     if (n==1) then
        call make_dir
 
-
-       open (14, file = trim(filename)//'dir/'//trim(title)//'.m')
+       open (14, file = trim(filename_out)//'.m')
        write(14,*) '% Plotting displacement for selected DOF'
        if (present(deltaT)) then; write(14,*) 'DeltaT=',deltaT,';' 
        endif
@@ -371,7 +373,7 @@ CONTAINS
     integer, parameter :: fid =13
     integer :: e, i, j
 
-    open (fid, file = trim(filename)//'dir/'//trim(filename)//title)
+    open (fid, file = trim(filename_out)//title)
     ! write nodal coordinates
     write(fid,'("X = [")')
     do i = 1,size(x,1)
@@ -812,7 +814,6 @@ CONTAINS
     write (10, *)
     write (10, '(" Node            Temperature                Element                      Temperature")')
 
-
     write (10, *)
     write (10, '(" Node      Temperature ")')
     do i = 1, nn
@@ -828,6 +829,26 @@ CONTAINS
     close (10)
 
   end subroutine output_term
+
+  subroutine write_vec_out(title,vec)
+    
+    character(len=*), intent(in) ::title
+    real(8),  intent(in) :: vec(:)
+    integer :: i
+
+    open (10, file = trim(filename_out)//'.out',POSITION='APPEND')
+
+    write(10,'(a)') trim(title)    
+    do i=1,size(vec,1)
+       !write(10 ,'( g8.3)', ADVANCE = "NO") (vec(i) ,i=1,size(vec,1))
+       write(10 ,'(i3, 2x, f10.3)') i, vec(i)
+    end do
+    
+    !Adding 1p in front of the e12.6 causes the scientific notation to display with one digit to the left of the decimal point.
+    !1pe12.6
+
+    close (10)
+  end subroutine write_vec_out
 
   !***********************************************************************
   subroutine WriteVTK(plotval,outfile,struct)

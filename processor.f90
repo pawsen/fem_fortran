@@ -32,7 +32,7 @@ contains
 
     write (*, *)
     write (*, '("Writing fem output file to ", a)') trim(filename)//'.out'
-    open (10, file = trim(filename)//'.out')
+    open (10, file = trim(filename_out)//'.out',POSITION='APPEND')
 
     if (banded == 1) then ! Angiv kun bw, hvis banded storage bruges.
        write(10, '("Bandwith", g15.0)') bw

@@ -81,21 +81,25 @@ contains
   end subroutine mumps_finalize_real
 
 
-  subroutine mumps_solve_real(type)
+  subroutine mumps_solve_real(type,rhs)
 
     use fedata
     use plot_routiner
     use numeth
 
     integer, intent(IN) :: type
+    real(8), optional, intent(in) :: rhs(:)
 
     INTEGER::  i ! , n ,nz,e, n2, display_print
 
     !real(8), allocatable, dimension(:) ::
     
-    if (.not. eigenvalue%calc) then
-       id%RHS = d
-    end if
+    select case(type)
+    case(3,5:6)
+       if (.not. eigenvalue%calc) then
+          id%RHS => d
+       end if
+    end select
 
     !Call package for solution
     select case(type)
@@ -121,10 +125,12 @@ contains
        stop
     END IF
 
-    select case(type)
-    case(3,5:6)
-       d = id%RHS
-    end select
+    ! if (eigenvalue%calc) then
+    !    select case(type)
+    !    case(3,5:6)
+    !       d = id%RHS
+    !    end select
+    ! end if
 
   end subroutine mumps_solve_real
 

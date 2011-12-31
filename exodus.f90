@@ -47,7 +47,7 @@ CONTAINS
     character*(MXSTLN):: coord_names(3)
     character*(MXSTLN):: cname
     character*(MXSTLN):: var_names(4)
-    character*(MXSTLN):: filename_exodus
+    character(len = 40):: filename_exodus !denne må åbenbart godt være længere end MXSTLN
 
     integer :: ierr, e
     integer :: kk, i, j,  m
@@ -61,7 +61,7 @@ CONTAINS
 
     ! create EXODUS II files
     call make_dir
-    filename_exodus = trim(filename)//'dir/'//trim(filename)//'.exo'
+    filename_exodus = trim(filename_out)//'.exo'
     exoid = excre (filename_exodus,EXCLOB, cpu_word_size, io_word_size, ierr)
 
     ! initialize file with parameters
@@ -182,12 +182,23 @@ CONTAINS
 
        ! bestem frekvens og lav lineær intepolation for tiden i een periode.
        frekvens = mat_vec(20)
-       omega = 2*pi* frekvens
-       period = 1./frekvens
+       if (int(frekvens) == 0) then
+          omega = 0d0
+          period = 0d0
+          num_time_steps = 2
+          print*
+          print*,'Frekvensen er 0, så jeg håber DU har sat potentialet på som cos.'
+          print*,'Hvis ikke, er både forskydninger og potential nul i .exo filen'
+          print*
+       else
+          omega = 2*pi* frekvens
+          period = 1./frekvens
+          num_time_steps = 100
+       end if
        lower = 0
        upper = period
 
-       num_time_steps = 100
+       
        do i = 1, num_time_steps
           time = lower+(real(i)-1.0)*(upper-lower)/(real(num_time_steps)-1.0)! lineær intepolation
 
@@ -251,7 +262,7 @@ CONTAINS
 
        num_time_steps = 1
        do i = 1, num_time_steps
-
+          time = 1
           ! write time value
           call exptim (exoid, i, time, ierr)!s152
           
@@ -271,7 +282,12 @@ CONTAINS
                    nodal_var_vals = 0.
                 end if
              case(3)! displacement z-direction
-                nodal_var_vals =  real(d(1:neqn:3),4)
+                if (element(1)%id == 2) then
+                   nodal_var_vals = 0.
+                else
+                   nodal_var_vals = real(d(1:neqn:3),4)
+                end if
+                
              case(4)! potential
                 nodal_var_vals =  real(d(neqn+1:neqn+nn),4)
              case default
@@ -308,7 +324,8 @@ CONTAINS
     character*(MXSTLN):: coord_names(3)
     character*(MXSTLN):: cname
     character*(MXSTLN):: var_names(4), elem_var_names(4)
-    character*(MXSTLN):: filename_exodus
+    character(len = 40):: filename_exodus !denne må åbenbart godt være længere end MXSTLN
+
 
     integer :: e
     integer :: kk, i, j,  m
@@ -320,7 +337,7 @@ CONTAINS
 
     ! create EXODUS II files
     call make_dir
-    filename_exodus = trim(filename)//'dir/'//trim(filename)//'.exo'
+    filename_exodus = trim(filename_out)//'.exo'
     exoid = excre (filename_exodus,EXCLOB, cpu_word_size, io_word_size, ierr)
 
 
