@@ -23,7 +23,7 @@ MODULE plot_routiner
 
 CONTAINS
 
-  subroutine output_anim(Dcurr,n,plotval) !gemmer forskydninger og sp�ndinger for hvert kald. Til animation
+  subroutine output_anim(Dcurr,n,plotval) !gemmer forskydninger og spÃ¯Â¿Â½ndinger for hvert kald. Til animation
 
     ! udskriver displ og stress/strain for hvert tidsskridt
 	integer, INTENT(IN) :: n
@@ -31,7 +31,7 @@ CONTAINS
     real(8),optional, INTENT(IN) :: plotval(:)
     integer :: i,e,j
     Character(10000)  string
-    ! m�ske character(len=*)
+    ! mÃ¯Â¿Â½ske character(len=*)
 
 
     if (n==1) then! write matlab datafile (topology) & plotting routine
@@ -62,7 +62,7 @@ CONTAINS
        write(13,*) '   D = data(:,2);'
        write(13,*) '   %DFFT(j)=data(end,2);'
        write(13,*) '   importfile([',"'",trim(filename)//'stress',"'",',num2str(j)])'
-       write(13,*) '   plotval = data(:,2); %von Mises sp�nding'
+       write(13,*) '   plotval = data(:,2); %von Mises spÃ¯Â¿Â½nding'
        write(13,*) '   if j==1'
        write(13,*) '   	cmap = colormap;'
        write(13,*) '   	cinterp = linspace(min(plotval),max(plotval),size(cmap,1));'
@@ -198,7 +198,7 @@ CONTAINS
     end if
 
     ! write datafile     
-    open (13, file = trim(filename_out)//'.m')
+    open (13, file = trim(dir_out)//trim(title)//'.m')
 
     ! write matrix
     write(13,'("mat = [")')
@@ -669,7 +669,7 @@ CONTAINS
 
   subroutine plot_gauss(nmax,deltaT, fc, T_0, delta)
 
-    ! Subroutine plotter den benyttede gauss-b�lgepakke
+    ! Subroutine plotter den benyttede gauss-bÃ¯Â¿Â½lgepakke
 
     INTEGER, INTENT(IN):: nmax
     REAL(8), INTENT(IN):: deltaT, fc, T_0, delta
@@ -678,14 +678,14 @@ CONTAINS
     call make_dir
     open (13, file = trim(filename)//'dir/'//'gauss.m')
 
-    write(13,*) '% GAUSS-PULS b�lgepakke'
+    write(13,*) '% GAUSS-PULS bÃ¯Â¿Â½lgepakke'
     write(13,*) 'clear all'
     write(13,*) 'clc'
-    write(13,*) 'fc = ',fc,';% center af b�lgepakke i frekvensdom�ne'
+    write(13,*) 'fc = ',fc,';% center af bÃ¯Â¿Â½lgepakke i frekvensdomÃ¯Â¿Â½ne'
     write(13,*) 'deltaT = ',deltaT,';% tidsskridt'
     write(13,*) 'nmax = ',nmax,';'
-    write(13,*) 'delta = ',delta,';% b�ndbredde'
-    write(13,*) 't_0 = ',T_0,';%center af b�lgepakke i tidsdom�ne'
+    write(13,*) 'delta = ',delta,';% bÃ¯Â¿Â½ndbredde'
+    write(13,*) 't_0 = ',T_0,';%center af bÃ¯Â¿Â½lgepakke i tidsdomÃ¯Â¿Â½ne'
     write(13,*) 'n = linspace(1,nmax,nmax);'
     write(13,*) 't = deltaT*n;'
     write(13,*) ''
@@ -707,7 +707,7 @@ CONTAINS
 
   subroutine output_data(title,rho,deltaT,dev)
 
-    ! til b�lgehastighed
+    ! til bÃ¯Â¿Â½lgehastighed
 
     character(len=*), intent(in) :: title
     real(8), INTENT(IN) :: deltaT, rho(:)
@@ -749,7 +749,7 @@ CONTAINS
 
     ! udskriver D for de valgte frihedsgrader
     ! fx. forskydningen i x-retningen for alle centerknuder.
-    ! bruges fx. til at animere b�lgens "vej" gennem bj�lken
+    ! bruges fx. til at animere bÃ¯Â¿Â½lgens "vej" gennem bjÃ¯Â¿Â½lken
 
     ! skriver alle forskydninger for et enkelt tidsskridt til samme fil
     ! dvs antallet af filer er lig antallet af tidsskridt
@@ -784,7 +784,7 @@ CONTAINS
     endif
 
     ! write displacement
-    open (10, file = trim(filename)//'dir/'//trim(filename)//'wave'//string) ! skriv fil p�ny. Dvs slet indhold
+    open (10, file = trim(filename)//'dir/'//trim(filename)//'wave'//string) ! skriv fil pÃ¯Â¿Â½ny. Dvs slet indhold
     do i=1,SIZE(D,1)
        write(10,'(f32.15)') d(i)
     end do

@@ -366,12 +366,12 @@ SUBROUTINE plate41rect_me(xe, young, nu, dens, thk, me)
   aa = (xe(4)-xe(1))/2.
   bb = (xe(11)-xe(2))/2.
   
-  !Påført moment i x-retning
+  !PÃ¥fÃ¸rt moment i x-retning
   IF (eface == 1) THEN
    re(2) = fe
    re(5) = fe
  
-  !Påført moment i y-retning
+  !PÃ¥fÃ¸rt moment i y-retning
   ELSEIF (eface == 2) THEN
    re(6) = fe
    re(9) = fe
@@ -384,7 +384,7 @@ SUBROUTINE plate41rect_me(xe, young, nu, dens, thk, me)
    re(12)= fe
    re(3) = fe
 
-  !fordelt last på latteral side
+  !fordelt last pÃ¥ latteral side
   ELSEIF (eface == 5) THEN
    !Forces in z-dir.
    re(1) = aa*bb*fe !Node 1

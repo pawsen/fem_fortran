@@ -4,6 +4,7 @@ module input_test
 
   PRIVATE
   PUBLIC :: input, rho_input, read_antype
+  PUBLIC :: matrix_input
 
 CONTAINS
 
@@ -13,7 +14,7 @@ CONTAINS
 
     !  This subroutine reads in the design-variabel (rho). It also tjek that the number of rho in the inputfile
     !  equals ne(number of elements). Notice that the file containing rho, should have a line only saying 
-    !  'rho[' and endline '];'(eg disse skal st� seperat og v�rdierne for rho st�r imellem disse tegn.
+    !  'rho[' and endline '];'(eg disse skal stï¿½ seperat og vï¿½rdierne for rho stï¿½r imellem disse tegn.
 
     real(8), dimension(:), intent(OUT) :: rho_vec
     character(len=*), intent(in), optional :: title
@@ -22,9 +23,9 @@ CONTAINS
     real(8) :: rvalue
     logical :: fnexist
 
-    if (present(title)) then ! indl�s fil givet fra 'title'-input
+    if (present(title)) then ! indlï¿½s fil givet fra 'title'-input
        rho_filename = trim(title)
-    else ! sp�rg om filnavn.
+    else ! spï¿½rg om filnavn.
 
        write (*, *)
        write (*, '("Enter rho input file (<filename> or enter for previous <filename>).")')
@@ -39,7 +40,7 @@ CONTAINS
           if (.not. fnexist) then
              write (*, *)
              write (*, '("Error: previous filename(rho) does not exist.")') 
-             !stop ! i stedet for at stoppe programmet tildeles rho v�rdien 1, hvorfor den ikke f�r nogen betydning.
+             !stop ! i stedet for at stoppe programmet tildeles rho vï¿½rdien 1, hvorfor den ikke fï¿½r nogen betydning.
              write (*, '("Rho has been given the default value 1: eq no influence on deformation")') 
              write (*, *)
              rho_vec = 1.0d0
@@ -57,7 +58,7 @@ CONTAINS
     if (.not. fnexist) then 
        write (*, *)
        write (*, '("Error: file(rho) ", a, " does not exist.")') trim(rho_filename) 
-       !stop ! i stedet for at stoppe programmet tildeles rho v�rdien 1, hvorfor den ikke f�r nogen betydning.
+       !stop ! i stedet for at stoppe programmet tildeles rho vï¿½rdien 1, hvorfor den ikke fï¿½r nogen betydning.
        write (*, '("Rho has been given the default value 1: eq no influence on deformation")')
        write (*, *)
        rho_vec = 1.0d0
@@ -76,21 +77,21 @@ CONTAINS
 
     nr = 0 ! antal rho i filen - dvs length(rho)
     do
-       read (10, *) command ! bem�rk *. Den fjerner 'blank spaces', s� den er MEGET vigtig
-       if (trim(command) == 'vec=[') then !Trim: Removes trailing blank characters of a string. Dvs ogs� MEGET vigtig ved sammenligning af strings
+       read (10, *) command ! bemï¿½rk *. Den fjerner 'blank spaces', sï¿½ den er MEGET vigtig
+       if (trim(command) == 'vec=[') then !Trim: Removes trailing blank characters of a string. Dvs ogsï¿½ MEGET vigtig ved sammenligning af strings
           do
              read (10, *) command
              if (trim(command) == '];') then
-            	exit ! slutningen af rho. G�r ud af f�rste do-l�kke
+            	exit ! slutningen af rho. Gï¿½r ud af fï¿½rste do-lï¿½kke
              else
             	nr = nr + 1
              endif
           enddo
-          exit ! G�r ud af anden do-l�kke
+          exit ! Gï¿½r ud af anden do-lï¿½kke
        endif
     end do
 
-    close (10) ! lukker filen, s� der l�ses fra toppen n�ste gang den �bnes
+    close (10) ! lukker filen, sï¿½ der lï¿½ses fra toppen nï¿½ste gang den ï¿½bnes
     open (10, file = trim(rho_filename))
 
     if (nr == ne) then
@@ -241,7 +242,7 @@ CONTAINS
        allocate (nodes(nd,2))
        nodes = 0.
     endif
-    !allocate (hconv(np)) ! thermal ! Bruges ikke mere, ligger i 5'te s�jle i load i stedet
+    !allocate (hconv(np)) ! thermal ! Bruges ikke mere, ligger i 5'te sï¿½jle i load i stedet
     ! Make thinkness equal to one as default
     mprop%thk = 1.
     ! And reset all other mprop parameters ! Sigmund 2007 addition
@@ -484,7 +485,7 @@ CONTAINS
           np = np + 1
           read (10, *) command, ivalue, ivalue2, cvalue, rvalue2, rvalue
           !############################## Check type of surface load !added 28_4_11 for thermal
-          ! note that cvalue2 er �ndret til rvalue 2, da cvalue er string og rvalue er real
+          ! note that cvalue2 er ï¿½ndret til rvalue 2, da cvalue er string og rvalue er real
           if (cvalue == 'PRESS' .or. cvalue == 'press' .or. cvalue == 'PRES' .or. cvalue == 'pres') then
              loads(np, 1) = 2                ! Type of load = pressure
              loads(np, 2) = ivalue           ! Element number
@@ -497,8 +498,8 @@ CONTAINS
              loads(np, 4) = rvalue           ! Size of load (temperature of surrounding fluid = T_inf)
              loads(np, 5) = rvalue2          ! convective heat transfer coefficient [W/m^2 * K]
              !hconv(np) = rvalue2                ! convective heat transfer coefficient [W/m^2 * K] ! Bruges ikke mere
-             ! grunden til at hconv ikke indg�r i loads, som loads(np,5), er er loads bliver allokeret som loads(np,4).
-             ! Og jeg ved ikke hvad det vil betyde, hvis det �ndres til loads(np,4). S� er det gjort alligevel...!
+             ! grunden til at hconv ikke indgår i loads, som loads(np,5), er er loads bliver allokeret som loads(np,4).
+             ! Og jeg ved ikke hvad det vil betyde, hvis det ændres til loads(np,4). Så er det gjort alligevel...!
           elseif (cvalue == 'HFLU' .or. cvalue == 'hflu') then
              loads(np, 1) = 4                ! Type of load = heat flux
              loads(np, 2) = ivalue           ! Element number
@@ -508,7 +509,7 @@ CONTAINS
              print*,'Error: command not press/pres, conv or hflu for SFE in input-routine(processor)'
              stop
           end if
-          ! Internal heat generation = Q. Samme v�rdi for hele strukturen
+          ! Internal heat generation = Q. Samme vï¿½rdi for hele strukturen
        elseif (command == 'INHG' .or. command == 'inhg') then
           backspace (10)
           read (10, *) command, rvalue
@@ -658,8 +659,55 @@ CONTAINS
 300 write (*, *)
     write (*, '("ERROR: no /SOLU FINISH in input file")')
     stop
-
+    
   end subroutine input
+
+  subroutine matrix_input(title,mat)
+
+    use fedata
+
+    real(8), intent(OUT) :: mat(:,:)
+    character(len=*), intent(in), optional :: title
+    integer :: i,j, jj, jj_max
+    logical :: fnexist
+    character(len=40) :: file
+
+
+    file = trim(dir_out)//trim(title)
+    inquire(file = trim(file), exist = fnexist)
+    if (.not. fnexist) then
+       file = trim(title)
+       inquire(file = trim(file), exist = fnexist)
+       if (.not. fnexist) then
+          print*,'Error fil: ', trim(title), 'kan ikke findes'
+          error stop
+       end if
+    end if
+    write (*, *) "Opening file: ", trim(file)
+    open (10, file =trim(file) )
+
+    j = size(mat,2)
+    jj_max = size(mat,1)
+    jj = 0
+
+    do jj = 1,jj_max
+
+       !jj = jj+1
+       if (jj> jj_max) then
+          print*,'Error: Allokeret matrix er for lille i forhold til filen der indlæses'
+          print*,'fil: ', trim(title)
+          error stop
+       end if
+       read (10,*) (mat(jj,i),i=1,j)  ! end = 10 => går til 10 stop
+
+    end do
+
+  close (10)
+
+  return
+
+  end subroutine matrix_input
+
 
   subroutine read_antype(sweep)
     use fedata
@@ -700,7 +748,7 @@ CONTAINS
     if (.not. fnexist) then 
        write (*, *)
        write (*, '("Error in read_antype: file(parametre) ", a, " does not exist.")') trim(rho_filename) 
-       !stop ! i stedet for at stoppe programmet tildeles rho værdien 1, hvorfor den ikke får nogen betydning.
+       !stop ! i stedet for at stoppe programmet tildeles rho vÃ¦rdien 1, hvorfor den ikke fÃ¥r nogen betydning.
        write (*, '("Antype er sat til static")')
        write (*, *)
        antype = 'STATIC'
@@ -765,7 +813,7 @@ CONTAINS
           ELSEIF (cvalue == 'TOPTHERMSTRUCT_hard' .OR. cvalue == 'topthermstruct_hard') THEN
              antype = 'TOPTHERMSTRUCT_hard'
           ELSE
-             print*,'ERROR - ANTYPE ikke genkendt - sætter antype = static'
+             print*,'ERROR - ANTYPE ikke genkendt - sÃ¦tter antype = static'
              antype = 'STATIC'
           END IF
        ELSEIF (command == 'ELEM_TYPE' .OR. command == 'elem_type') THEN
@@ -830,7 +878,7 @@ CONTAINS
     end if
 
 
-    close (10) ! lukker filen, så der læses fra toppen næste gang den åbnes
+    close (10) ! lukker filen, sÃ¥ der lÃ¦ses fra toppen nÃ¦ste gang den Ã¥bnes
 
   end subroutine read_antype
 

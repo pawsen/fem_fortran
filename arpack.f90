@@ -12,53 +12,63 @@ CONTAINS
 
     use fedata
     use fea
-    use piezo
+    use piezo, only : buildstiff_eigenvalue_piezo, inverse_sparse
     use solve_handle_real
     use exodus
-    use plate, only : buildstiff_plate
     use plot_routiner, only : write_vec_out
 
     real(8), allocatable :: tmp_mat(:,:)
     integer :: nzz,i, n_eigen, j, n_conv
-    real(8) :: sigma
+    real(8) :: sigma, time
     logical :: shift
     real(8), allocatable :: eigenval(:,:), eigenvec(:,:), eigenfreq(:)
+    logical, parameter :: include_piezo = .false.
+!    logical, parameter :: include_piezo = .true.
 
-    eigenvalue%sigma = sigma
-    shift = eigenvalue%shift    
+
+    shift = eigenvalue%shift  
+    if (shift) then
+       sigma = eigenvalue%sigma
+    else
+       sigma = 0d0
+    end if
     n_eigen = eigenvalue%n_eigen
 
     allocate(eigenval(n_eigen,3), eigenvec(neqn,n_eigen))
 
-    if (.not.shift) then
-       call build_mvec !build mass-vector
-       
-       select case( element(1)%id )
-       case(2)
-          call buildstiff_fea(0) ! build sparse stiffness-matrix
-       case default
-          call buildstiff_eigenvalue_piezo
-       end select
+    call build_mvec !build mass-vector
+    select case( element(1)%id )
+    case(2)
+       call buildstiff_fea(0) ! build sparse stiffness-matrix
+    case default
+       if (include_piezo) then
+          call inverse_sparse
+       else
+          call buildstiff_eigenvalue_piezo(shift)
+          !call buildstiff_plate
+       end if
 
-!!$       call buildmass_fea(0)
-!!$       call mumps_init_real
-!!$       call mumps_solve_real(4)
-    else
-       select case( element(1)%id )
-       case(2)
-          call buildstiff_fea(0)
-       case default
-          call buildstiff_plate
-       end select
+    end select
 
-       call build_mvec
+    if (shift) then
+       print*,'EIGEN: Init mumps'
        call mumps_init_real
        call mumps_solve_real(4)
     end if
 
 
-    call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,n_conv,eigenval,eigenvec)
-    call exodus_write(eigenval(1:n_conv,:),eigenvec(:,1:n_conv))
+    call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,nnz_ub,n_conv,eigenval,eigenvec)
+    call exodus_init
+    do i=1,n_conv
+       time =  SQRT(eigenval(i,1))/(2*pi)!egenfrekvens. Kun real-part
+       ! scale eigenvector
+       eigenvec(:,i) = eigenvec(:,i)/ SQRT( DOT_PRODUCT(eigenvec(1:neqn:3,i),eigenvec(1:neqn:3,i)) )
+       call exodus_write_node(i, eigenvec(:,i))
+       call exodus_write_time(i,time)
+    end do
+    call exodus_finalize
+
+!    call exodus_write(eigenval(1:n_conv,:),eigenvec(:,1:n_conv))
     
     allocate(eigenfreq(n_conv))
     eigenfreq =  SQRT(eigenval(:,1)) /(2.0*Pi )
@@ -66,14 +76,15 @@ CONTAINS
     
   end subroutine arpack_init
 
-  subroutine arpack_plane(n_eigenvalue,neqn,shift,sigma,iK,jK,sK, n_converged, eigenval, eigenvec)
+  subroutine arpack_plane(n_eigenvalue,neqn,shift,sigma,iK,jK,sK,nnz_ub, &
+       n_converged, eigenval, eigenvec)
     
     use fea
     use solve_handle_real
     use numeth
     use sort_array
    
-    integer, intent(in) :: n_eigenvalue, neqn, iK(:), jK(:)
+    integer, intent(in) :: n_eigenvalue, neqn, iK(:), jK(:), nnz_ub
     integer, intent(out) :: n_converged
     real(8), intent(out) :: eigenval(:,:), eigenvec(:,:)
     real(8), intent(in), optional :: sK(:)
@@ -91,7 +102,7 @@ CONTAINS
     real(8), allocatable, dimension(:) :: ax,mx,resid,workd,workev,workl
     real(8), allocatable :: d(:,:), v(:,:)
     !v: indeholder egenvektorer
-    !d: indeholder egenv�rdier
+    !d: indeholder egenvÃ¦rdier
     
     !%---------------%
     !| Local Scalars |
@@ -165,7 +176,7 @@ CONTAINS
     !%-----------------------------------------------------%
 
     lworkl = 3*ncv**2+6*ncv 
-    tol    = 1E-8!1E-!0.0 
+    tol    = 0.!1E-8!1E-!0.0 
     ido    = 0
     info   = 0
 
@@ -372,8 +383,10 @@ CONTAINS
                    !| Ritz value is real |
                    !%--------------------%
 
-                   call mmul_fea(v(1:n,j),ax(1:n),1) !av
-                   call mmul_fea(v(1:n,j),mx(1:n),2) !mv
+                   call sparse_multiply(iK(1:nnz_ub),jK(1:nnz_ub),sK(1:nnz_ub),v(1:n,j),ax(1:n),.true.) ! av
+
+                   call mvec_mul(v(1:n,j),mx(1:n),1) !mv
+
                    call daxpy(n, -d(j,1), mx, 1, ax, 1)
                    d(j,3) = dnrm2(n, ax, 1)
                    d(j,3) = d(j,3) / abs(d(j,1))
@@ -387,16 +400,17 @@ CONTAINS
                    !| pair is computed.      |
                    !%------------------------%
 
-                   call mmul_fea(v(1:n,j),ax(1:n),1) !av
-                   call mmul_fea(v(1:n,j),mx(1:n),2) !mv
+                   call sparse_multiply(iK(1:nnz_ub),jK(1:nnz_ub),sK(1:nnz_ub),v(1:n,j),ax(1:n),.true.) ! av
+
+                   call mvec_mul(v(1:n,j),mx(1:n),1) !mv
                    call daxpy(n, -d(j,1), mx, 1, ax, 1)
-                   call mmul_fea(v(1:n,j+1),mx(1:n),2) !mv      
+                   call mvec_mul(v(1:n,j+1),mx(1:n),1) !mv
                    call daxpy(n, d(j,2), mx, 1, ax, 1)
                    d(j,3) = dnrm2(n, ax, 1)**2
-                   call mmul_fea(v(1:n,j+1),ax(1:n),1) !av
-                   call mmul_fea(v(1:n,j+1),mx(1:n),2) !mv
+                   call sparse_multiply(iK(1:nnz_ub),jK(1:nnz_ub),sK(1:nnz_ub),v(1:n,j+1),ax(1:n),.true.) ! av
+                   call mvec_mul(v(1:n,j+1),mx(1:n),1) !mv
                    call daxpy(n, -d(j,1), mx, 1, ax, 1)
-                   call mmul_fea(v(1:n,j),mx(1:n),2) !mv  
+                   call mvec_mul(v(1:n,j),mx(1:n),1) !mv
                    call daxpy(n, -d(j,2), mx, 1, ax, 1)
                    d(j,3) = dlapy2( d(j,3), dnrm2(n, ax, 1) )
                    d(j,3) = d(j,3) / dlapy2(d(j,1),d(j,2))
@@ -419,6 +433,8 @@ CONTAINS
              print*,'eigenfrekvency '
              do i=1,nev
                 print*,i, SQRT(d(i,1)) /(2.0*3.1415927 )
+                !print*,i, d(i,1)
+
              end do
              print*
 
@@ -471,6 +487,7 @@ CONTAINS
     end do
 
     if (nconv >0) then
+       !eigenval(1:nconv,:) = sqrt(d(1:nconv,1:3)) /(2.0*3.1415927 )
        eigenval(1:nconv,:) = d(1:nconv,1:3)
        eigenvec(:,1:nconv) = v(1:neqn, 1:nconv)
        n_converged = nconv

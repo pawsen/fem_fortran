@@ -192,7 +192,7 @@ CONTAINS
                 bound_buf(nb,2) = 1 !UZ/UX
              case(10006)
                 bound_buf(nb,3) = 0 ! prescribed value
-                bound_buf(nb,2) = 2 !UZ/UX
+                bound_buf(nb,2) = 2 !UY/psiX
              end select
           end select
        case(3) ! 4-node quad
@@ -224,7 +224,7 @@ CONTAINS
           case(100001 :) ! find piezo-nummeret
              n_ptz_buf = MOD(tags(1),100000)
 
-             element(ivalue)%ptz = 2*Pi/n_ptz*(n_ptz_buf-1)!-1 fordi ring.geo er skrevet med c-syntax, dvs første piezo-element har nummer 0
+             element(ivalue)%ptz = 2*Pi/n_ptz*(n_ptz_buf-1)!-1 fordi ring.geo er skrevet med c-syntax, dvs fÃ¸rste piezo-element har nummer 0
              !print*,'phi= ',  element(ivalue)%ptz
 
              ! Polarisering

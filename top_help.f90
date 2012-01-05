@@ -6,67 +6,70 @@ MODULE top_help
 
   PRIVATE
   PUBLIC :: mma_handle, oc, neighbourMatrix,filter, density_filter, gradient, &
-       finite_check, lambda_calc, force_rho,force_elements_init
+       finite_check,finite_check_eigen, lambda_calc, force_rho,force_elements_init
   PUBLIC :: compare_eigenval
 
 CONTAINS
 
-  SUBROUTINE mma_handle(iteration,inak,low,upp,max_vol,objekt,vol,rho, rho_old, rho_old2, &
+  SUBROUTINE mma_handle(iteration,inak,rho_min,low,upp,max_vol,objekt,vol,xval,xval_old, xval_old2, &
        df0dx, dg,rho_tilde,nc,movelimit_in,constraint,dconstraint)
 
 	use fedata
 
-	REAL(8), DIMENSION(:), intent(INOUT) :: low, upp, rho_old, rho_old2, rho
+	REAL(8), DIMENSION(:), intent(INOUT) :: low, upp, xval_old, xval_old2, xval
     INTEGER, INTENT(IN) :: iteration, nc! nc = number of constraint
     REAL(8), DIMENSION(:),optional, intent(IN) :: rho_tilde
     REAL(8), DIMENSION(:), intent(IN) :: df0dx,vol,dg
 
     REAL(8), DIMENSION(:,:), optional, intent(IN) :: dconstraint ! gradienter for constraint (udover volumen)
 
-    real(8), INTENT(IN) :: objekt,max_vol
+    real(8), INTENT(IN) :: objekt,max_vol, rho_min
     real(8),optional, INTENT(INOUT) :: movelimit_in, constraint(:)
     type(INAKTIV_def), intent(in) :: inak
 
-    INTEGER:: e, j, ne_aktiv
-
+    INTEGER:: e, j, ne_aktiv, n, i
+    
     ! MMA 
-   	! Initialisering af hj�lpevariable
+   	! Initialisering af hjælpevariable
    	INTEGER,dimension(:), allocatable :: IYFREE
     REAL(8),dimension(:), allocatable :: ALFA, BETA, P0, Q0 ! size=ne
 	! Output
     REAL(8) :: zmma
-    REAL(8),DIMENSION(:), allocatable :: rho_new ! size=ne
+    REAL(8),DIMENSION(:), allocatable :: xval_new ! size=ne
+
     ! Input
     REAL(8) :: geps, top_vol, movelimit
     REAL(8), DIMENSION(:), allocatable :: amma,cmma, fval, fmax ! st parameter
     REAL(8), DIMENSION(:), allocatable :: xmin, xmax !size=ne
 	REAL(8), DIMENSION(:), allocatable :: dfdx
     REAL(8), DIMENSION(:), allocatable :: UU,GRADF, DSRCH,PMMA, QMMA,BMMA, ymma, ulam,HESSF
-    
-    allocate( dfdx(nc*j),PMMA(nc*j), QMMA(nc*j)  ) ! alle gradienter til contraints      
-    
-    allocate( UU(nc),GRADF(nc), DSRCH(nc),BMMA(nc),IYFREE(nc),ymma(nc) )
-    allocate(ulam(nc),HESSF(nc*(nc+1)/2))
-    allocate(amma(nc),cmma(nc),fval(nc),fmax(nc)) 
-    
+
     if (inak%bool) then
        ne_aktiv = size(inak%act,1)
     else
        ne_aktiv = ne
     end if
-    
-    j = ne_aktiv ! number of elements that is to be optimized == design variabels
+
+    j = size(xval)
+    n = size(xval)
+
+    allocate( dfdx(nc*j),PMMA(nc*j), QMMA(nc*j)  ) ! alle gradienter til contraints      
+
+    allocate( UU(nc),GRADF(nc), DSRCH(nc),BMMA(nc),IYFREE(nc),ymma(nc) )
+    allocate(ulam(nc),HESSF(nc*(nc+1)/2))
+    allocate(amma(nc),cmma(nc),fval(nc),fmax(nc)) 
+
     allocate(xmin(j),xmax(j))
     allocate(ALFA(j),BETA(j),P0(j),Q0(j))
-    allocate(rho_new(j))
-       
+    allocate(xval_new(j))
+
     !FVAL(i): Value of the i:th constarint
     !FMAX(i): Right hand side of the i:th constraint
     !DFDX(k): Dericative of f_i(x) with respect to x_j, where k = (j-1)*M+i
     
     ! Initialisering af MMA-parametre
     amma = 0.0
-    cmma = 1000.0
+    cmma = 100000.
     geps = 1.0E-6
     fmax = 0.0 ! rhs. af vol. constraint, sum(rho)/V_max - 1 <=0
     top_vol = 0.0
@@ -79,49 +82,59 @@ CONTAINS
     end if
 
     if (antype == 'TRANSIENT') then
-       ! Da der ikke er nogen begr�nsning(constraint), skal fval s�ttes s� den altid er opfyldt. Dvs fval < fmax =0
+       ! Da der ikke er nogen begrænsning(constraint), skal fval sættes så den altid er opfyldt. Dvs fval < fmax =0
        fval = -1.0d0
     else
-       top_vol = dot_product(rho_tilde,vol) ! det skal v�re den fysiske volumen og ikke matematisk
-       fval(1) = top_vol/max_vol - 1 ! skaleret
-       print *,'fval', fval(1)
+       top_vol = dot_product(rho_tilde,vol) ! det skal være den fysiske volumen og ikke matematisk
+       fval(nc) = top_vol/max_vol - 1 ! skaleret
+       print *,'fval', fval(nc)
     end if
 
+    n = size(xval)
 	if (nc == 1) then ! kun volumen
        dfdx= dg
        amma = 0d0
     else
-       amma = 1d0
+       ! Ændret til eigenvalue.Skal være amma = 1d0 for min(max)
+       amma = 0d0!1d0
        amma(nc) = 0D0
-       fval(nc) = fval(1)
+       !fval(nc) = fval(1)
        do j=1,nc-1
           fval(j) = constraint(j)
        end do
        ! k = (j-1)*M + i
-       do e = 1,ne_aktiv
-          do j=1,nc
-             dfdx((e-1)*nc+j) = dconstraint(e,j)
+       do j = 1,n ! for ALL design variabels
+          do i=1,nc
+             dfdx((j-1)*nc+i) = dconstraint(j,i)
           end do
        end do
     end if
 
    	do e=1,ne_aktiv
-       xmin(e) = DMAX1(0.001, rho(e) - movelimit) ! Set move limits on design variables
-       xmax(e) = DMIN1(1.000, rho(e) + movelimit)
+       ! If 0.001 is set too low, eg 1e-9, then convergence is poor. I dont know why?
+       xmin(e) = MAX(0.001d0, xval(e) - movelimit) ! Set move limits on design variables
+       xmax(e) = MIN(1.000d0, xval(e) + movelimit)
     end do
+    if (n > ne_aktiv ) then
+       do e=ne_aktiv+1,n
+          xmin(e) = MAX(100000., xval(e) - movelimit*100)
+          xmax(e) = MIN(10000000., xval(e) + movelimit*100)
+       end do
+    end if
 
+    n = size(xval)
 	! nc = number of constraint.
-    call mmasub(iteration,nc,ne_aktiv,geps,IYFREE,rho,rho_new,xmin,xmax,rho_old,rho_old2,low,upp,&
-         ALFA,BETA,amma,BMMA,cmma,ymma,zmma,ulam,objekt,fval,fmax,df0dx,dfdx,PMMA,QMMA,P0,Q0,UU, &
-         GRADF,DSRCH,HESSF)
+    call mmasub(iteration,nc,n,geps,IYFREE,xval,xval_new,xmin,xmax,xval_old,xval_old2,low,upp,&
+         ALFA,BETA,amma,BMMA,cmma,ymma,zmma,ulam,objekt,fval,fmax,df0dx,dfdx, & 
+         PMMA,QMMA,P0,Q0,UU,GRADF,DSRCH,HESSF)
 
     if (iteration > 2) then
-       rho_old2 = rho_old
+       xval_old2 = xval_old
     end if
     if (iteration > 1) then
-       rho_old = rho
+       xval_old = xval
     end if
-    rho = rho_new
+    xval = xval_new
 
 
   END SUBROUTINE mma_handle
@@ -140,10 +153,10 @@ CONTAINS
     INTEGER :: e
     REAL(8) :: lambda1, lambda2, lambda_mid, epsilon, g, rho_min
 
-    lambda1 = 1.0E-10 !nedre startg�t
-    lambda2 = 1.0E10 !�vre startg�t
+    lambda1 = 1.0E-10 !nedre startgï¿½t
+    lambda2 = 1.0E10 !ï¿½vre startgï¿½t
     !epsilon = 1.0E-8 ! stopkoefficient
-    rho_min = 1.0E-6 ! Mindste v�rdi densiteten kan antage
+    rho_min = 1.0E-6 ! Mindste vï¿½rdi densiteten kan antage
 
     do while ( (lambda2-lambda1)/(lambda1+lambda2) > 1.0E-8 )
 
@@ -247,14 +260,14 @@ CONTAINS
     do e = 1, ne_aktiv
        count = 0
        neigh(e,1) = n_neigh(e)+1 ! antal af naboelementer - incl elementet selv
-       neigh(e,2) = e !elementet selv t�lles med
-       neigh(e,3) = rmin ! det har v�gtningen rmin
+       neigh(e,2) = e !elementet selv tï¿½lles med
+       neigh(e,3) = rmin ! det har vï¿½gtningen rmin
        do i = 1, ne_aktiv
           dist_ei = dsqrt( (center(e,1)-center(i,1))**2 + (center(e,2)-center(i,2))**2 )
           if (dist_ei <= rmin .and. e /= i .and. count+1 < n_neigh(e)) then
              count = count + 1
              neigh(e,2*(count+1)) = i ! Naboelementnummer
-             neigh(e,2*(count+1)+1) = rmin - dist_ei ! v�gtning
+             neigh(e,2*(count+1)+1) = rmin - dist_ei ! vï¿½gtning
           elseif (dist_ei <= rmin .and. e /= i .and. count+1 == n_neigh(e)) then ! sidste element
              count = count + 1
              neigh(e,2*(count+1)) = i
@@ -264,7 +277,7 @@ CONTAINS
        end do
 	end do
 
- ! Selvom elementnumrene bliver gemt som real(dvs floating point) og senere konverteret til int(i routinerne hvor de bruges), synes det ikke at v�re et problem.
+ ! Selvom elementnumrene bliver gemt som real(dvs floating point) og senere konverteret til int(i routinerne hvor de bruges), synes det ikke at være et problem.
 
  ! print neighbourhood
  !$$$$$$              print*,'Weight ='
@@ -325,7 +338,7 @@ CONTAINS
              else
                 weigth = Neigh(e,2*f+1)
                 dcn(e) = dcn(e) +  weigth* rho(neigh_num)*dc(neigh_num)/vol(neigh_num)
-                denum = denum + weigth !v�gtning
+                denum = denum + weigth !vægtning
              end if
              !print*,weigth
           end do
@@ -379,7 +392,7 @@ CONTAINS
              end do
              dd = Neigh(e,2*e2+1)*vol(i)/denum
 
-             dd = (beta*EXP(-beta*(1.0-rho(i)))+EXP(-beta))*dd ! k�dereglen: rho er rho_tilde, hvor den kaldes  
+             dd = (beta*EXP(-beta*(1.0-rho(i)))+EXP(-beta))*dd ! kædereglen: rho er rho_tilde, hvor den kaldes  
 
              numer = numer + dd*dc(i)
              numer2 = numer2 + dd*dg(i)
@@ -405,7 +418,7 @@ CONTAINS
              dd = Neigh(e,2*e2+1)*vol(i)/denum
 
              dd = ((1-dtanh(beta*(rho(i)-eta))**2)*beta/&
-                  (dtanh(beta*eta)+dtanh(beta*(1-eta)))) *dd ! k�dereglen: rho er rho_tilde, hvor den kaldes  
+                  (dtanh(beta*eta)+dtanh(beta*(1-eta)))) *dd ! kædereglen: rho er rho_tilde, hvor den kaldes  
 
              numer = numer + dd*dc(i)
              numer2 = numer2 + dd*dg(i)
@@ -433,13 +446,15 @@ CONTAINS
     type(INAKTIV_def), intent(in) :: inak
     
     integer :: i, e, neigh_num, ne_aktiv
-    real(8) :: numer, denum,weigth, rho_filter(ne)
+    real(8) :: numer, denum,weigth
+    real(8), allocatable :: rho_filter(:)
 
     if (inak%bool) then
        ne_aktiv = size(inak%act,1)
     else
        ne_aktiv = ne
     end if
+    allocate(rho_filter(ne_aktiv))
 
     do e = 1, ne_aktiv ! #5 i iterationsskema s. 414
 
@@ -595,7 +610,7 @@ CONTAINS
           case(4)
              print *, 'Error in top_help->gradient; Jeg skal ikke kaldes, da det er et termisk topOpt problem'
              error stop
-          case(7)! Force inverter med begr�nsning p� krydskobling
+          case(7)! Force inverter med begrï¿½nsning pï¿½ krydskobling
              lamb1 = lambda1(edof)
              dc(i) = -penal*(1d0-rho_min)*rho(i)**(penal-1d0) *DOT_PRODUCT(lamb1,matmul(ke,de))
 
@@ -606,7 +621,9 @@ CONTAINS
              if (.not. double_eigen) then
                 de = eigenvec(edof)
                 !normalization of eigenvector wrt. mass matrix
-                de = de/SQRT(DOT_PRODUCT(de,matmul(me,de)))
+                !de = de/SQRT(DOT_PRODUCT(de,matmul(me,de)))
+                
+                !print*, DOT_PRODUCT(de,matmul(me,de))
 
                 call eigen_mat(rho(i),rho_min,eigenval,ke,me,helpmat)
                 dc(i) = DOT_PRODUCT(de,matmul(helpmat,de))
@@ -616,9 +633,9 @@ CONTAINS
                    allocate(de1(mdim,2), mat(2,2), eigenval_lapack(2))
                 end if
                 de1(:,1) = eigenvec_d(edof,1)
-                de1(:,1) = de1(:,1)/SQRT(DOT_PRODUCT(de1(:,1),matmul(me,de1(:,1))))
+                !de1(:,1) = de1(:,1)/SQRT(DOT_PRODUCT(de1(:,1),matmul(me,de1(:,1))))
                 de1(:,2) = eigenvec_d(edof,2)
-                de1(:,2) = de1(:,2)/SQRT(DOT_PRODUCT(de1(:,2),matmul(me,de1(:,2))))
+                !de1(:,2) = de1(:,2)/SQRT(DOT_PRODUCT(de1(:,2),matmul(me,de1(:,2))))
 
                 !from (26) in article by Jensen&Pedersen we store the sensitivities from an double eigenfrequency in mat
                 do ii=1,2
@@ -645,12 +662,12 @@ CONTAINS
 
              end if
 
-          case default ! compliance = gradient p� "normal" vis.
+          case default ! compliance = gradient på "normal" vis.
              dc(i) = - penal*(1d0-rho_min)*rho(i)**(penal-1d0) * DOT_PRODUCT(de,matmul(ke,de))! de=eigenvector
           end select   
        end do
 
-    elseif (problem_type == 6) then !ikke-line�r Force inverter
+    elseif (problem_type == 6) then !ikke-lineï¿½r Force inverter
        res_vek = 0d0
 
        do e = 1, ne
@@ -706,9 +723,9 @@ CONTAINS
     real(8), intent(out) :: helpmat(:,:)
 
     if (rho<0.1) then
-       helpmat =  penal*(1d0-rho_min)*rho**(penal-1d0)*ke - eigenval * 6d0*rho**5 *me
+       helpmat =  penal*(1d0-rho_min)*rho**(penal-1)*ke - eigenval * 6d0*rho**5 *me
     else
-       helpmat =  penal*(1d0-rho_min)*rho**(penal-1d0)*ke - eigenval *me
+       helpmat =  penal*(1d0-rho_min)*rho**(penal-1)*ke - eigenval *me
     end if
 
   end subroutine eigen_mat
@@ -765,8 +782,312 @@ CONTAINS
        end select
     end do
     call bsolve(k_t,lambda2)
-
+    
   end subroutine lambda_calc
+
+  
+  subroutine finite_check_eigen(problem_type,inak, filter_type,vol,max_vol, rho,rho_min, &
+       f_scale,dc)
+
+    use numeth
+    use fedata
+    use fea
+    use piezo, only : buildstiff_eigenvalue_piezo
+    use solve_handle_real
+    use arpack
+    use plot_routiner, only : output_matrix
+
+  	! This subroutine calculates the finite difference check of the gradients:
+
+	integer, intent(IN) ::  filter_type, problem_type
+    type(INAKTIV_def), intent(in) :: inak
+  	REAL(8), DIMENSION(:), INTENT(IN) :: rho, vol, dc
+    real(8), intent(in) ::   rho_min, max_vol, f_scale
+
+    integer :: i,j,e,ii, elem_list(4)
+    integer :: ne_aktiv
+
+    ! Eigenvalue specific
+    logical, parameter :: shift = .true.
+    integer :: n_eigen, n_conv
+    real(8) :: sigma
+    real(8), allocatable :: eigenval(:,:), eigenvec(:,:)
+
+	real(8) :: fa, fb, delta_pert(8)
+    real(8), allocatable :: rho_pert(:), df_mat(:,:)
+
+
+    n_eigen = 1
+    sigma = 0d0
+    i = n_eigen
+    allocate(eigenval(1,3), eigenvec(neqn,i))
+
+    ! Udvælg nogle få elementer
+    if (inak%bool) then
+       ne_aktiv = size(inak%act,1)
+       elem_list =inak%act( (/ 1,10,50,100/) )
+    else
+       ne_aktiv = ne
+       elem_list = (/ 1, 10, 50, 1000/)
+    end if
+
+    allocate(rho_pert(ne_aktiv))
+    i = size(elem_list)* size(delta_pert)
+    allocate(df_mat(i,3))
+
+    do i=1,size(delta_pert)
+       delta_pert(i) = 1/(1d0*10**(i))
+       print*,'delta_pert(i)',delta_pert(i)
+    end do
+
+    rho_pert = rho
+
+    select case( filter_type )
+    case(0:1)
+       ! nothing to be done
+    case(2)
+       ! do some stuff
+       error stop
+    case(3)
+       ! do some other stuff
+       error stop
+    case(4) ! ROBUST virker pt. kun med problem (9)
+       ! do a crazy amount of stuff
+       error stop
+    end select
+
+
+
+
+    ! find uperbateret? egenværdi
+    call build_mvec(rho_pert) !build mass-vector
+    if (elem_type == 'PLATE_GMSH') then
+       call buildstiff_eigenvalue_piezo(shift,rho_pert,rho_min)
+       !call buildstiff_plate(rho,rho_min)
+    else
+       call buildstiff_fea(0,rho_pert,rho_min)
+    end if
+    ! Solve system
+    call mumps_solve_real(2)! numerical factorizing
+    call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,nnz_ub, &
+         n_conv,eigenval,eigenvec)
+
+    fb = eigenval(1,1)
+
+
+
+    do i = 1,size(elem_list)
+       do j = 1,size(delta_pert)
+          ! Der benyttes central-differens
+          ! NB kun et element ændres ad gangen. Resten holdes "oprindelig". Derfor nulsættes rho_pert i bunden af løkken
+
+          ! For rhoa:
+          e = elem_list(i)
+
+
+          rho_pert(e) = rho_pert(e) + delta_pert(j)
+
+          if ( rho_pert(e) < 0) then
+             print*,'ERROR, rho < 0 i fd_check. element nr: ', e
+             error stop
+          end if
+
+          ! Objektfunktion
+          select case (problem_type)
+          case(12)
+             ! setup matrices
+             call build_mvec(rho_pert) !build mass-vector
+             if (elem_type == 'PLATE_GMSH') then
+                call buildstiff_eigenvalue_piezo(shift,rho_pert,rho_min)
+                !call buildstiff_plate(rho,rho_min)
+             else
+                call buildstiff_fea(0,rho_pert,rho_min)
+             end if
+             ! Solve system
+             call mumps_solve_real(2)! numerical factorizing
+             call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,nnz_ub, &
+                  n_conv,eigenval,eigenvec)
+
+             fa = eigenval(1,1)
+          end select
+
+          ! ! For rhob:
+          ! rho_pert(e) = rho_pert(e) + 2.0d0*delta_pert(j)
+
+          ! ! Objektfunktion
+          ! select case (problem_type)
+          ! case(12)
+          !    ! setup matrices
+          !    call build_mvec(rho_pert) !build mass-vector
+          !    if (elem_type == 'PLATE_GMSH') then
+          !       call buildstiff_eigenvalue_piezo(shift,rho_pert,rho_min)
+          !       !call buildstiff_plate(rho,rho_min)
+          !    else
+          !       call buildstiff_fea(0,rho_pert,rho_min)
+          !    end if
+          !    ! Solve system
+          !    call mumps_solve_real(2)! numerical factorizing
+          !    call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,nnz_ub, &
+          !         n_conv,eigenval,eigenvec)
+
+          !    fb = eigenval(1,1)
+          ! end select
+
+          ! rho_pert(e) = rho_pert(e) - delta_pert(j)
+
+          rho_pert(e) = rho_pert(e) - delta_pert(j)
+
+
+          ! Finite Difference
+          ii = (i-1)*size(delta_pert) + j
+          !          print*,'ii',ii
+          !df_mat(ii,2) = (fb - fa)/(2.0d0*delta_pert(j)) ! "beregnede" sensitivities
+          df_mat(ii,2) = (fa-fb)/(delta_pert(j)) ! "beregnede" sensitivities
+          df_mat(ii,2) = df_mat(ii,2)
+
+          df_mat(ii,1) = delta_pert(j)
+          ! analytisk sensitiviteter
+          df_mat(ii,3) = dc(e) 
+
+       end do
+    end do
+
+    select case( filter_type )
+    case( 0:1 )
+       !df_approx(1:ne,2) = dc/f_scale ! analytiske sensitivities, skaleret FILTRERET
+    case(2)
+       !de beregnede sensitiviteter skal filtreres
+    case(3)
+       ! de beregnede sensitiviteter skal filtreres
+    case(4)
+       ! de beregnede sensitiviteter skal filtreres
+       !fd_dc(1:ne) = df_approx(1:ne,1)
+  	end select
+
+   ! print to file
+   call output_matrix(df_mat,'fd_matrix')
+
+  end subroutine finite_check_eigen
+
+
+  subroutine force_elements_init ! (Tag evt. bï¿½de 'force_elements'& 'force_rho(rho)' rutinerne herunder...)
+    ! Her findes elementer, hvor krï¿½fter virker: 
+    ! Alle elementer gennemgï¿½s og de for hvilke en knudepunkt svarende til et knudepunkt i loads registreres.
+
+    use fedata
+
+    integer :: e, n, nen, i,elem
+    real(8) :: center(ne,2), xLength,yLength,radius,dist_ei
+
+    i = 0
+    do e=1,ne ! Jeg tï¿½ller fï¿½rst...
+       nen = element(e)%numnode
+       do n=1,nen
+          if ( element(e)%ix(n) == springs(1,2) ) then
+             i = i + 1
+             elem = e
+          end if
+       end do
+    end do
+
+
+
+    center = 0.0d0
+	do e=1,ne
+       nen = element(e)%numnode
+       do n = 1,nen
+          center(e,1) =center(e,1)+ 1.0/4.0 * x(element(e)%ix(n), 1) ! x-koordinat, Centrum af element e
+          center(e,2) =center(e,2)+ 1.0/4.0 * x(element(e)%ix(n), 2)
+       end do
+   	end do
+
+    xLength = real(x(element(1)%ix(2),1)) - real(x(element(1)%ix(1),1)) 
+    yLength = real(x(element(1)%ix(2),2)) - real(x(element(1)%ix(1),2))
+    radius = dsqrt( xLength**2 + yLength**2) * 2
+
+    do e = 1,ne
+       dist_ei = dsqrt( (center(e,1)-center(elem,1))**2 + (center(e,2)-center(elem,2))**2 ) ! Afstand mellem centre af e og f
+       if (dist_ei <= radius .and. e /= elem) then
+          i = i + 1
+       end if
+    end do
+
+    allocate(force_elements(i))
+
+    i = 0
+    do e=1,ne ! Nu noterer jeg ogsï¿½...
+       nen = element(e)%numnode
+       do n=1,nen
+          if ( element(e)%ix(n) == springs(1,2) ) then
+             i = i + 1
+             force_elements(i) = e
+          end if
+       end do
+    end do
+
+    do e = 1,ne
+       dist_ei = dsqrt( (center(e,1)-center(elem,1))**2 + (center(e,2)-center(elem,2))**2 ) ! Afstand mellem centre af e og f
+       if (dist_ei <= radius .and. e /= elem) then
+          i = i + 1
+          force_elements(i) = e
+       end if
+    end do
+
+    print*,'e'
+
+
+
+  end subroutine force_elements_init
+
+  subroutine force_rho(rho)
+
+    ! Gennemtvinger at rho lig 1 i elementer, hvor krï¿½fter virker.
+
+    use fedata
+
+
+	real(8), dimension(:), intent(INOUT) :: rho
+	integer :: i
+
+	do i = 1,size(force_elements,1)
+       rho(force_elements(i))=1.0d0
+    end do
+
+  end subroutine force_rho
+
+  subroutine compare_eigenval(w,index)
+
+    real(8), intent(in) :: w(:)
+    integer, intent(out) :: index(:)
+    integer :: i,j,n_eigen
+    real(8) :: tol
+   
+    tol = 1E-3
+
+    index = 0
+    
+    !index = [1,2]
+    !return
+
+    n_eigen = size(w,1)
+    do i=1,n_eigen
+       do j=1,n_eigen
+          if (j > i) then
+             if ( ABS(w(i)-w(j)) < tol) then
+                !eigenvalues are numerical identical.
+                !In the present implementation of the optimization, we can only have two identical eigenvalues
+                index(1) = i
+                index(2) = j
+                return
+             end if
+          end if
+       end do
+    end do
+
+
+  end subroutine compare_eigenval
+  
+
 
 
   subroutine finite_check(flag,problem_type,inak, filter_type,vol,max_vol, rho,rho_min2, L, lambda, dc,&
@@ -797,7 +1118,7 @@ CONTAINS
     real(8), dimension(ne) :: rho_pert, fd_dc, dg,dc_analytisk, rho_old, rho_pert_tilde
     real(8), dimension(ne) :: dc_dummy
 
-    ! Ekstra input tilf�jet til transient
+    ! Ekstra input tilfï¿½jet til transient
     integer, optional, intent(inout) :: parameters(:)
     integer, optional, intent(in) :: dof_x(:)
     real(8), optional, intent (in) :: deltaT, U0(:), dotU0(:)
@@ -805,12 +1126,12 @@ CONTAINS
     real(8) :: objekt, dummy_mat(1,1) = 0.0d0 ! til kald af transient
     integer :: i,n,nmax
 
-    ! tilf�jet pga. thermal - skal "optimeres"
+    ! tilfï¿½jet pga. thermal - skal "optimeres"
     real(8) :: compliance, rho_min
-    !linux_fejl : rho_min i input er omd�bt til rho_min2, fordi der var en fejl ved kompilering
+    !linux_fejl : rho_min i input er omdøbt til rho_min2, fordi der var en fejl ved kompilering
 
     ! til transient
-    select case (problem_type) ! d�rlig l�sning
+    select case (problem_type) ! dï¿½rlig lï¿½sning
     case (10)
     case default
        if (present(parameters)) then
@@ -854,7 +1175,7 @@ CONTAINS
        call density_filter(inak,vol, rho_pert)
 
        do e=1,ne ! rho_tilde -> rho_bar
-          rho_pert_tilde(e) = rho_pert(e) ! Oprindelig densitetsv�gtet designvar. Skal bruges i filter ved k�deregel
+          rho_pert_tilde(e) = rho_pert(e) ! Oprindelig densitetsvï¿½gtet designvar. Skal bruges i filter ved kï¿½deregel
           rho_pert(e) = EXP(-beta*(1.0-rho_pert(e))) - (1.0-rho_pert(e))*EXP(-beta) ! Modificeret heavyside funktion (29) -> rho_bar/rho_tilde
        end do
 
@@ -902,7 +1223,7 @@ CONTAINS
     rho_old = rho_pert
 
     do e = 1,ne ! Der benyttes central-differens og IKKE forward-differens som i noterne fra FEM-kurset
-       ! NB kun �t element �ndres ad gangen. Resten holdes "oprindelig". Derfor nuls�ttes rho_pert i bunden af l�kken
+       ! NB kun ï¿½t element ï¿½ndres ad gangen. Resten holdes "oprindelig". Derfor nulsï¿½ttes rho_pert i bunden af lï¿½kken
        ! For rhoa:
        rho_pert(e) = rho_pert(e) - delta_pert
        if ( rho_pert(e) < 0) then
@@ -915,7 +1236,7 @@ CONTAINS
        ! Objektfunktion
        select case (problem_type)
        case(0)
-          !buildload kaldes ikke displ, s� hvis den er design-afh�ngig skal den kaldes nu
+          !buildload kaldes ikke displ, sï¿½ hvis den er design-afhï¿½ngig skal den kaldes nu
           !buildstiff kaldes fra displ
           call displ(flag,rho_pert,rho_min)
           fa = DOT_PRODUCT(d,p)
@@ -960,9 +1281,9 @@ CONTAINS
        case(10)
           call displ(flag,rho,rho_min) ! #6, solve system
           fa = DOT_PRODUCT(d,Lmulti(:,1)) ! Compliance for forskydning 1
-          objekt = DOT_PRODUCT(d,Lmulti(:,2)) ! objekt er blot hj�lpest�rrelse
+          objekt = DOT_PRODUCT(d,Lmulti(:,2)) ! objekt er blot hjï¿½lpestï¿½rrelse
           fa = fa+objekt+0.1*(fa-objekt)**2
-       case default ! gradient p� "normal" vis.
+       case default ! gradient pï¿½ "normal" vis.
           fa = DOT_PRODUCT(d,p)
        end select
 
@@ -972,7 +1293,7 @@ CONTAINS
        ! Objektfunktion
        select case (problem_type)
        case(0)
-          !buildload kaldes ikke displ, s� hvis den er design-afh�ngig skal den kaldes nu
+          !buildload kaldes ikke displ, sï¿½ hvis den er design-afhï¿½ngig skal den kaldes nu
           !buildstiff kaldes fra displ
           call displ(flag,rho_pert,rho_min)
           fb = DOT_PRODUCT(d,p)
@@ -1015,9 +1336,9 @@ CONTAINS
        case(10)
           call displ(flag,rho,rho_min) ! #6, solve system
           fb = DOT_PRODUCT(d,Lmulti(:,1)) ! Compliance for forskydning 1
-          objekt = DOT_PRODUCT(d,Lmulti(:,2)) ! objekt er blot hj�lpest�rrelse
+          objekt = DOT_PRODUCT(d,Lmulti(:,2)) ! objekt er blot hjï¿½lpestï¿½rrelse
           fb = fb+objekt+0.1*(fb-objekt)**2
-       case default ! gradient p� "normal" vis.
+       case default ! gradient pï¿½ "normal" vis.
           fb = DOT_PRODUCT(d,p)
        end select
 
@@ -1025,7 +1346,7 @@ CONTAINS
        df_approx(e,1) = (fb - fa)/(2.0d0*delta_pert) ! "beregnede" sensitivities
        df_approx(e,1) = df_approx(e,1)/f_scale       
 
-       rho_pert(e) = rho_pert(e) - delta_pert ! nulstil det �ndrede element
+       rho_pert(e) = rho_pert(e) - delta_pert ! nulstil det ï¿½ndrede element
 
  	end do
 
@@ -1059,122 +1380,6 @@ CONTAINS
 
   end subroutine finite_check
 
-
-  subroutine force_elements_init ! (Tag evt. b�de 'force_elements'& 'force_rho(rho)' rutinerne herunder...)
-    ! Her findes elementer, hvor kr�fter virker: 
-    ! Alle elementer gennemg�s og de for hvilke en knudepunkt svarende til et knudepunkt i loads registreres.
-
-    use fedata
-
-    integer :: e, n, nen, i,elem
-    real(8) :: center(ne,2), xLength,yLength,radius,dist_ei
-
-    i = 0
-    do e=1,ne ! Jeg t�ller f�rst...
-       nen = element(e)%numnode
-       do n=1,nen
-          if ( element(e)%ix(n) == springs(1,2) ) then
-             i = i + 1
-             elem = e
-          end if
-       end do
-    end do
-
-
-
-    center = 0.0d0
-	do e=1,ne
-       nen = element(e)%numnode
-       do n = 1,nen
-          center(e,1) =center(e,1)+ 1.0/4.0 * x(element(e)%ix(n), 1) ! x-koordinat, Centrum af element e
-          center(e,2) =center(e,2)+ 1.0/4.0 * x(element(e)%ix(n), 2)
-       end do
-   	end do
-
-    xLength = real(x(element(1)%ix(2),1)) - real(x(element(1)%ix(1),1)) 
-    yLength = real(x(element(1)%ix(2),2)) - real(x(element(1)%ix(1),2))
-    radius = dsqrt( xLength**2 + yLength**2) * 2
-
-    do e = 1,ne
-       dist_ei = dsqrt( (center(e,1)-center(elem,1))**2 + (center(e,2)-center(elem,2))**2 ) ! Afstand mellem centre af e og f
-       if (dist_ei <= radius .and. e /= elem) then
-          i = i + 1
-       end if
-    end do
-
-    allocate(force_elements(i))
-
-    i = 0
-    do e=1,ne ! Nu noterer jeg ogs�...
-       nen = element(e)%numnode
-       do n=1,nen
-          if ( element(e)%ix(n) == springs(1,2) ) then
-             i = i + 1
-             force_elements(i) = e
-          end if
-       end do
-    end do
-
-    do e = 1,ne
-       dist_ei = dsqrt( (center(e,1)-center(elem,1))**2 + (center(e,2)-center(elem,2))**2 ) ! Afstand mellem centre af e og f
-       if (dist_ei <= radius .and. e /= elem) then
-          i = i + 1
-          force_elements(i) = e
-       end if
-    end do
-
-    print*,'e'
-
-
-
-  end subroutine force_elements_init
-
-  subroutine force_rho(rho)
-
-    ! Gennemtvinger at rho lig 1 i elementer, hvor kr�fter virker.
-
-    use fedata
-
-	real(8), dimension(:), intent(INOUT) :: rho
-	integer :: i
-
-	do i = 1,size(force_elements,1)
-       rho(force_elements(i))=1.0d0
-    end do
-
-  end subroutine force_rho
-
-  subroutine compare_eigenval(w,index)
-
-    real(8), intent(in) :: w(:)
-    integer, intent(out) :: index(:)
-    integer :: i,j,n_eigen
-    real(8) :: tol
-   
-    tol = 1E-3
-
-    index = 0
-    
-    !index = [1,2]
-    !return
-
-    n_eigen = size(w,1)
-    do i=1,n_eigen
-       do j=1,n_eigen
-          if (j > i) then
-             if ( ABS(w(i)-w(j)) < tol) then
-                !eigenvalues are numerical identical.
-                !In the present implementation of the optimization, we can only have two identical eigenvalues
-                index(1) = i
-                index(2) = j
-                return
-             end if
-          end if
-       end do
-    end do
-
-
-  end subroutine compare_eigenval
 
 
 END MODULE top_help

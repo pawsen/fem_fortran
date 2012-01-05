@@ -16,7 +16,7 @@ CONTAINS
   SUBROUTINE mindlin42_dielectric(xe, mat_vec,ep,thk,ng, ke,type,phi)
 
     ! This subroutine constructs the element conductivity matrix [k_e].
-    use plane41
+    use plane41, only: plane41_shape
 
     IMPLICIT NONE
 
@@ -27,7 +27,7 @@ CONTAINS
     REAL(8),optional, INTENT(in) :: phi
 
     INTEGER :: i, j
-    REAL(8) :: Jmat(2,2)!epsilon(2,2)
+    REAL(8) :: Jmat(2,2), helpmat(4,2) !epsilon(2,2)
     REAL(8) :: Bmat(2,4),  Nvec(4), jac(2,2), detjac
     REAL(8), DIMENSION(:) , allocatable:: w, xi, eta
     REAL(8) :: T_p(3,3), T_t(2,2), Lambda(2,2), helpp(2,2) ! rotation
@@ -47,7 +47,8 @@ CONTAINS
     do i = 1 , ng
        do j = 1 , ng
           call plane41_shape(xe, xi(i), eta(j), Nvec, bmat, detjac, jac)
-          ke = ke - w(i)*w(j) * MATMUL(MATMUL(TRANSPOSE(bmat),Jmat), bmat) * detjac ! minus is intended!
+          helpmat = MATMUL(TRANSPOSE(bmat),Jmat)
+          ke = ke - w(i)*w(j) * MATMUL(helpmat, bmat) * detjac ! minus is intended!
        end do
     end do
 
@@ -56,7 +57,7 @@ CONTAINS
   SUBROUTINE mindlin42_piezo(xe, mat_vec, thk,ng, ke,phi)
     ! This subroutine constructs the stiffness matrix for
     ! a rectangular 4-noded quad element.
-    use plane41
+    use plane41, only : plane41_shape
 
     IMPLICIT NONE
 
@@ -127,7 +128,7 @@ CONTAINS
     allocate(w(ng),xi(ng),eta(ng))
     call gauss_points(w,xi,eta,ng)
 
-    ! værdien af faktoren k, står på s 535 i cook
+    ! vÃ¦rdien af faktoren k, stÃ¥r pÃ¥ s 535 i cook
     k = 5d0/6d0
     !k = 5d0/8d0
 
@@ -160,7 +161,7 @@ CONTAINS
        end do
     end do
 
-    ! For at undgå shear-locking, skal k_s integreres med "single Gauss kvadrature"(dvs ng = 1), jf
+    ! For at undgÃ¥ shear-locking, skal k_s integreres med "single Gauss kvadrature"(dvs ng = 1), jf
     ! "Element Behavior", s 543 i cook
     xi_1 = 0d0
     eta_1 = 0d0
@@ -222,7 +223,7 @@ CONTAINS
        Cmat(2, 2) = mat_vec(4) - mat_vec(3)**2/mat_vec(1)
        Cmat(3, 3) = mat_vec(5)
 
-       Cs_mat(1,1) = mat_vec(6)*k!det er korrekt at mat_vec(6) kommer før mat_vec(5)
+       Cs_mat(1,1) = mat_vec(6)*k!det er korrekt at mat_vec(6) kommer fÃ¸r mat_vec(5)
        Cs_mat(2,2) = mat_vec(5)*k
 
        if (nc == 3) then
@@ -275,7 +276,7 @@ CONTAINS
 
     if (shear < 1E-3 ) then! in case it's forgotten to give shear a value in input-file
        shear = young/(2*(1+nu))
-       !print*,'shear er ikke angivet i inputfil. Værdi er udregnet, mindlin41.f90'
+       !print*,'shear er ikke angivet i inputfil. VÃ¦rdi er udregnet, mindlin41.f90'
     end if
 
     ! shear stiffness
@@ -390,7 +391,9 @@ CONTAINS
 
              thk_ptz = z(4)-z(3)
              thk_pcb = z(3)-z(2)
-             Jmat = 2*epsilon*thk_ptz + epsilon_pcb* thk_pcb
+             Jmat = 2d0*epsilon*thk_ptz + epsilon_pcb* thk_pcb
+
+             !print *,ep, mat_vec(10),  mat_vec(11)+mat_vec(7)**2/mat_vec(1)
           else
              ! integration of two laminate plates, each with thickness 1/2*thk
              Jmat = epsilon*thk
@@ -494,12 +497,12 @@ CONTAINS
     bb = (xe(8)-xe(2))/2d0
     re = 0d0
 
-    !Påført moment i x-retning
+    !PÃ¥fÃ¸rt moment i x-retning
     IF (eface == 1) THEN
        re(2) = fe
        re(5) = fe
 
-       !Påført moment i y-retning
+       !PÃ¥fÃ¸rt moment i y-retning
     ELSEIF (eface == 2) THEN
        re(6) = fe
        re(9) = fe
@@ -512,7 +515,7 @@ CONTAINS
        re(12)= fe
        re(3) = fe
 
-       !fordelt last på latteral side
+       !fordelt last pÃ¥ latteral side
     ELSEIF (eface == 5) THEN
        ! Ved mindlin-plader skal en fordelt latteral kraft kun ligges til i Uz-frihederne, dvs intet moment-bidrag, modsat kirchoff hvor der er kobling
 
@@ -546,7 +549,7 @@ CONTAINS
     REAL(8) :: jac(2,2), N(3,12), detjac,B_M(5,12), B_b(3,12), B_s(2,12)
     REAL(8) :: estress_2(3)
 
-    ! værdien af faktoren k, står på s 535 i cook
+    ! vÃ¦rdien af faktoren k, stÃ¥r pÃ¥ s 535 i cook
     k = 5d0/6d0
 
     xi = 0
@@ -581,13 +584,13 @@ CONTAINS
     D_M(4,4) = k*shear*thk
     D_M(5,5) = k*shear*thk
 
-    !Momenter og kræfter(en kraft, flere kræfter!), jf (15.1-5), s 534 i cook
+    !Momenter og krÃ¦fter(en kraft, flere krÃ¦fter!), jf (15.1-5), s 534 i cook
     MCR = -MATMUL(D_M, kappa)
-    ! spændinger angives i teksten øverst s 533 i cook
+    ! spÃ¦ndinger angives i teksten Ã¸verst s 533 i cook
     estress(1:3) = 6*MCR(1:3)/thk**2
     estress(4:5) = 1.5*MCR(4:5)/thk
 
-    !alternativt kan spændingerne gives ud fra plane-stress udtrykket, 15.1-3
+    !alternativt kan spÃ¦ndingerne gives ud fra plane-stress udtrykket, 15.1-3
     estress_2 =   MATMUL(Cmat, estrain(1:3))
 
 

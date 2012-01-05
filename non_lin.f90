@@ -8,7 +8,7 @@ module nonlin
 contains
 
 
-   ! Ikke-line�re rutiner
+   ! Ikke-lineï¿½re rutiner
 
   subroutine non_lin(flag,rho,rho_min)
 
@@ -36,7 +36,7 @@ contains
     n_inner = 100
     animation = 0 !	0: ingen animation
 
-	! indl�s datafil
+	! indlï¿½s datafil
     !subroutine inputfile(file,filter_type,solver_type,problem_type,vol_type,rmin_type,info,save_rho,n_iter,&
 	!				stop_krit,animation,penal,damp_fact,max_vol,rmin,rho_min,tol,movelimit)
     !if ((present(rho) .and. (.not. present(rho_min)) ) then
@@ -69,7 +69,7 @@ contains
     d = 0.0 !reset displacement
 
 	kk = 0
-	n = 0 ! t�llevariabel til animation
+	n = 0 ! tï¿½llevariabel til animation
     do i=1,n_incr
        P = P+deltaP
 
@@ -117,7 +117,7 @@ contains
           deltaD(1:neqn) = R(1:neqn)
           d=d+deltaD
 
-          ! break skal f�rst ske efter k er blevet faktoriseret, 
+          ! break skal fï¿½rst ske efter k er blevet faktoriseret, 
           if (normR/normP<tol) then
              !$$$$$$           print*,j 
              exit
@@ -159,7 +159,7 @@ contains
 
     !$$$$$$ compliance=dot_product(d,p)
     do e=1,ne
-       plotval(e) = (stress(e,1)**2+stress(e,2)**2-stress(e,1)*stress(e,2)+3.0*stress(e,3)**2)**(0.50d0) !von mises sp�nding
+       plotval(e) = (stress(e,1)**2+stress(e,2)**2-stress(e,1)*stress(e,2)+3.0*stress(e,3)**2)**(0.50d0) !von mises spï¿½nding
     end do
     !$$$$$$     
     !$$$$$$      print*,compliance
@@ -210,7 +210,7 @@ contains
           edof(2*i)   = 2 * element(e)%ix(i)
        end do
 
-       ! da ke laves p� baggrund af forskydningen for det enkelte element, er det ikke muligt at bruge "flag" option
+       ! da ke laves pï¿½ baggrund af forskydningen for det enkelte element, er det ikke muligt at bruge "flag" option
        young = mprop(element(e)%mat)%young
        thk = mprop(element(e)%mat)%thk
        nu = mprop(element(e)%mat)%nu
@@ -218,13 +218,13 @@ contains
 
        do i = 1, 2*nen
           do j =1, 2*nen
-             if (edof(i)>=edof(j)) then ! brug kun elementer der st�r under eller p� diagonalen i global K+
+             if (edof(i)>=edof(j)) then ! brug kun elementer der stï¿½r under eller pï¿½ diagonalen i global K+
                 !if ((antype == 'STATIC') .or. (antype == 'COUPLED') .or. (antype == 'TRANSIENT')) then
                 if (.not. present(rho)) then
                    k((edof(i)-edof(j)+1),edof(j)) = k((edof(i)-edof(j)+1),edof(j)) + ke(i,j)
                 else
                    k((edof(i)-edof(j)+1),edof(j)) = k((edof(i)-edof(j)+1),edof(j)) + &
-                        (rho_min+(1d0-rho_min)*rho(e)**penal)*ke(i,j)! Modificeret SIMP-v�gtning af elasticitetsmodul
+                        (rho_min+(1d0-rho_min)*rho(e)**penal)*ke(i,j)! Modificeret SIMP-vï¿½gtning af elasticitetsmodul
                 end if
              end if
           end do
@@ -244,7 +244,7 @@ contains
     end do
 
 
-    !�������������������������������������������������������������
+    !ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     ! springs
     if (nk > 0) then
        do i = 1, nk
@@ -255,7 +255,7 @@ contains
           end if
        end do
     end if
-    !�������������������������������������������������������������
+    !ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
   end subroutine buildstiff_nonlin
 
@@ -369,13 +369,13 @@ contains
        stress(e, 1) = cauchy_stress(1,1)
        stress(e, 2) = cauchy_stress(2,2)
        stress(e, 3) = cauchy_stress(2,1)
-       !$$$$$$         plotval(e) = (stress(e,1)**2+stress(e,2)**2-stress(e,1)*stress(e,2)+3.0*stress(e,3)**2)**(0.50d0) !von mises sp�nding
+       !$$$$$$         plotval(e) = (stress(e,1)**2+stress(e,2)**2-stress(e,1)*stress(e,2)+3.0*stress(e,3)**2)**(0.50d0) !von mises spï¿½nding
 
        strain(e, 1:3) = estrain
 	end do
 
   end subroutine cauchy
 
-  !�������������������������������������������������
+  !ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 end module nonlin

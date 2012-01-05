@@ -29,10 +29,13 @@ CONTAINS
     integer, intent(IN) :: flag
     ! generelt fil
     integer :: i,j, e, iter,n_iter, itend, idof, idof2, nc, ne_aktiv
+    integer :: n, na
 
     ! TopOpt - stuff
-    real(8), dimension(:), allocatable :: rho, vol, dc, dg, dc_filter
-    real(8), dimension(:), allocatable :: plotval, rho_mat, rho_old, rho_old2, rho_tilde, constraint
+    real(8), dimension(:), allocatable :: rho,rho_tilde, vol, dc, dg, dc_filter
+    real(8), dimension(:), allocatable :: plotval
+    real(8), dimension(:), allocatable :: xval, xval_mat, xval_old, xval_old2
+    real(8), dimension(:), allocatable :: dobject, constraint
     real(8) :: rho_min
 
     ! Parametre
@@ -67,11 +70,12 @@ CONTAINS
     real(8) :: rpenal
 
     !eigenfrequency
-    real(8) :: sigma
+    real(8) :: sigma, start_guess
     integer :: n_eigen, n_conv
     logical :: shift
     real(8), allocatable :: eigenval(:,:), eigenvec(:,:)
     integer, allocatable ::list(:)
+    logical, parameter :: scale = .true.
 
 
     ! Mn_iter = 100MA 
@@ -80,18 +84,20 @@ CONTAINS
 
     real(8) :: a1,a2,a3,a4,a5,a6,a7,a8
 
+    start_guess = 233101.
+    !start_guess = 50d0
 
     ! TOPOPT & FILTER INITIAL:
     file 		= 5		!  1:bridge1 			2 = MBB5, 3: T01, 4 = MBB fra filter-artikel
     filter_type = 2		! 0: No filter 			1: Sensivity filter. 2: Density
     solver_type = 2		! 1: Bisection			2: MMA
     vol_type 	= 2		! 1: absolut volumen	2: Volfrac
-    rmin_type 	= 2		! 1: absolut afstand	2: afstand i forhold til elementets st�rrelse
-    fd_check   	= 0		! 0: Fra				1: Finite difference check
-    animation 	= 0		! 0: Fra				1: Animation		2: �ndring af rho
+    rmin_type 	= 2		! 1: absolut afstand	2: afstand i forhold til elementets stï¿½rrelse
+    fd_check   	= 1		! 0: Fra				1: Finite difference check
+    animation 	= 0		! 0: Fra				1: Animation		2: ï¿½ndring af rho
     info 		= 1		! information
     problem_type = 1	! 0: compliance			1: forceinverter	2: mekanisme thermal	3: mekanisme koblet termisk		4: thermal
-    !flag				! s�ttes i main
+    !flag				! sættes i main
     save_rho	= 0		! 0: fra				1: gem rho som filename_rho
     stop_krit	= 1		! 0: fra				1: brug stopkriterie
 
@@ -103,7 +109,7 @@ CONTAINS
     rmin = 1.3d0! The filter radius percent of max element side length
     damp_fact = 0.6 ! til OC
 
-    ! hvis en fil med "filename_para.txt" eksisterer, bliver parametrene indl�st her.
+    ! hvis en fil med "filename_para.txt" eksisterer, bliver parametrene indlæst her.
     call inputfile(file,filter_type,solver_type,problem_type,vol_type,rmin_type,info,save_rho,n_iter,&
          stop_krit,animation,penal,damp_fact,max_vol,rmin,rho_min,tol,movelimit)
 
@@ -115,7 +121,8 @@ CONTAINS
     zeta=1e-2
     
     allocate(inak)
-    inak%bool = .true.    
+    inak%bool = .true.
+    !inak%bool = .false.
 
     ! Inaktive elementer
     if (inak%bool) then
@@ -141,12 +148,20 @@ CONTAINS
     else
        ne_aktiv = ne
     end if
+    
+    select case(problem_type)
+    case(12)! bound formulation: we introduce a new designvariabel, 
+       n = ne_aktiv+1 ! total number of design variabel
+       j = ne_aktiv ! number of active elements, eg to be filtered
+    case default
+       n = ne_aktiv
+       j = ne_aktiv
+    end select
 
-    j = ne_aktiv
-    allocate(rho(j), vol(j), dc(j), dg(j), dc_filter(j))
-    allocate(rho_old(j), rho_old2(j), low(j), upp(j), rho_tilde(j))
-    allocate(df_approx(j,2))
-    allocate( rho_mat(j) ) ! skal bruges til mma
+    allocate(rho(j),rho_tilde(j),vol(j), dc(j), dg(j), dc_filter(j))
+    allocate(xval(n), xval_old(n), xval_old2(n), low(n), upp(n))
+    allocate(dobject(n), df_approx(j,2))
+    allocate( xval_mat(n) ) ! skal bruges til mma
 
     allocate ( compliance_out(n_iter), plotval(ne) )
     compliance_out = 0.0
@@ -162,26 +177,33 @@ CONTAINS
     case( 2 ) ! volfrac
        max_vol = total_vol*max_vol
     end select
-    rho = max_vol/(total_vol*1.2) ! Hvert element(uanset st�rrelse) tildeles samme "densitet"/"designvariabel-v�rdi".
+    rho = max_vol/(total_vol*1.2) ! Hvert element(uanset størrelse) tildeles samme "densitet"/"designvariabel-værdi".
 
-    if(rho(1)>1) then ! Tjek at tildelt densitet ikke er st�rre end 1.
+    if(rho(1)>1) then ! Tjek at tildelt densitet ikke er større end 1.
        write (*, *) 'Error: max_vol/vol_frac er for stor, torsk!'
        error stop
     end if
+    
+    na = ne_aktiv
+    xval(1:na) = rho
+    select case(problem_type)
+    case(12)
+       xval(na+1) = start_guess! gæt på beta
+    end select
 
     select case( solver_type)
     case(1)
        print*, 'OC'
     case(2)
-       rho_old = rho
-       rho_old2 = rho
+       xval_old = xval
+       xval_old2 = xval
        low = 0.0d0
        upp = 1.0d0
        print*, 'MMA-solver'
     end select
 
-    ! INIT. AF NEIGHBOURHOOD MATRIX SAMT FILTERAFH�NGIGE ST�RRELSER:
-    ! skal �ndres s� "flag" ogs� tages som input
+    ! INIT. AF NEIGHBOURHOOD MATRIX SAMT FILTERAFHÆNGIGE STØRRELSER:
+    ! skal ændres så "flag" også tages som input
     select case( filter_type )
     case( 1:2 )
        call neighbourMatrix(inak,rmin_type,rmin)
@@ -202,7 +224,7 @@ CONTAINS
        call exodus_init
     end select
 
-    ! Test af indl�sning/skrivning af rho. Det virker
+    ! Test af indlæsning/skrivning af rho. Det virker
     !$$$$$$     call output_vector(rho,'rho')
     !$$$$$$     call rho_input(rho_vec)
     !$$$$$$     call output_vector(rho_vec,'rho_ny')
@@ -216,7 +238,7 @@ CONTAINS
     L = 0.0d0
     select case (problem_type)
     case(0) ! statisk problem
-       call buildload !Buildload kaldes her da den ikke er design-afh�ngig. Dvs den skal kun kaldes een gang
+       call buildload !Buildload kaldes her da den ikke er design-afhængig. Dvs den skal kun kaldes een gang
        if (banded == 2) then
            call buildstiff_fea(flag,rho,rho_min)
            call mumps_init_real
@@ -251,7 +273,7 @@ CONTAINS
        ! find elemeter der sidder hvor fjederen er monteret
        call force_elements_init
     case(3)! mekanisme med koblet termisk last
-       allocate(lambda2(nn))! Bem�rk der er byttet om  p� lambda1 og lambda2 i forhold til nummerering i bogen
+       allocate(lambda2(nn))! Bemï¿½rk der er byttet om  pï¿½ lambda1 og lambda2 i forhold til nummerering i bogen
        allocate( t_elem(ne) )
        solver_type = 2
        do i = 1, nk
@@ -263,7 +285,7 @@ CONTAINS
     case(4) ! Thermal
        call buildtermload
 
-    case(6) ! (1): geometrisk ikke-line�r
+    case(6) ! (1): geometrisk ikke-lineær
        call buildload
        solver_type = 2
        do i = 1, nk
@@ -305,7 +327,7 @@ CONTAINS
        D_mat = 0d0
        compliance_mat = 0d0
        dconstraint = 0d0
-       ! opdel de p�f�rte krafter i P1/P2/P3... ud fra "fjeder-inputtet"
+       ! opdel de påførte krafter i P1/P2/P3... ud fra "fjeder-inputtet"
        do i = 1, nk
           idof = 2*(springs(i, 2)-1)+springs(i, 3)
           P_mat(idof,i) = P(idof)
@@ -329,7 +351,7 @@ CONTAINS
        call buildload
        solver_type = 2
        rpenal = 1d0
-       allocate(Lmulti(neqn,2),lambda_mat(neqn,2),dconstraint(ne,2),constraint(2)) ! her bruges constraint m.m. blot som hj�lpest�rrelser
+       allocate(Lmulti(neqn,2),lambda_mat(neqn,2),dconstraint(ne,2),constraint(2)) ! her bruges constraint m.m. blot som hjï¿½lpestï¿½rrelser
        Lmulti = 0d0
        j=0
        do i = 1, nk
@@ -352,17 +374,16 @@ CONTAINS
        call mumps_init_real
 
        eigenvalue%calc = .true.
-       sigma = 0d0
-       eigenvalue%sigma = sigma
        shift = eigenvalue%shift
+       sigma = eigenvalue%sigma ! shift value
        n_eigen = 4
        allocate(eigenval(n_eigen,3), eigenvec(neqn,n_eigen))
 
        nc = n_eigen+1 !n_eigen + volumen!
-       allocate(constraint(nc-1),dconstraint(ne_aktiv,nc))
+       n = ne_aktiv +1
+       allocate(constraint(nc-1),dconstraint(n,nc))
        allocate(list(2))!contains id of double eigenvalue
     end select
-
 
 
     !##############################
@@ -370,22 +391,24 @@ CONTAINS
     iter = 0
     f_scale = 1d0
     do i = 1,n_iter
-       ! s�tter rho hvor fjederen er monteret til 1.
+       ! sætter rho hvor fjederen er monteret til 1.
        select case( problem_type)
        case(1)
           !$$$$$$                 call force_rho(rho)
        end select
 
        iter = i
-       rho_mat = rho ! MMA skal have den "oprindelige" rho ind og ikke rho_hat. Derfor gemmes den her
-       select case (filter_type) ! overvej at ligge denne ned efter mma, routinen. Her g�r den ingen godt!
+       
+       !rho_mat = rho ! MMA skal have den "oprindelige" rho ind og ikke rho_hat. Derfor gemmes den her
+       ! Vi bruger nu xval. Og da den ikke filtreres, er det ikke nødvendigt at kopiere xval over mere
+       select case (filter_type) ! overvej at ligge denne ned efter mma, routinen. Her gï¿½r den ingen godt!
        case( 2)
           ! Computation of filteret densities rho_hat
           call density_filter(inak,vol, rho) ! #5 i paper
        case ( 3 )
           call density_filter(inak,vol, rho)
-          rho_tilde = rho ! skal bruges i "filter" pga. k�deregel
-          do e=1,ne
+          rho_tilde = rho ! skal bruges i "filter" pga. kï¿½deregel
+          do e=1,ne_aktiv
              rho(e) = EXP(-beta*(1.0-rho(e))) - (1.0-rho(e))*EXP(-beta) ! Modificeret heavyside (29): rho -> rho_bar
              if (rho(e) < 0.0d0) then
                 rho(e) = 0.0d0
@@ -393,9 +416,9 @@ CONTAINS
           end do
        case(4) ! densitetsfilter med robustprojektion
           call density_filter(inak,vol, rho)
-          rho_tilde = rho ! skal bruges i "filter" pga. k�deregel
+          rho_tilde = rho ! skal bruges i "filter" pga. kï¿½deregel
           do j = 1,3
-             do e=1,ne
+             do e=1,ne_aktiv
                 rho_bar(e,j) = (dtanh(beta*eta(j))+dtanh(beta*(rho_tilde(e)-eta(j))))/&
                      (dtanh(beta*eta(j))+dtanh(beta*(1-eta(j))))
              end do
@@ -415,7 +438,7 @@ CONTAINS
           end if
 
           call exodus_write_elem(i,plotval)
-          call exodus_write_time(i,real(i))
+          call exodus_write_time(i,real(i,8))
 
           call  plotanim(iter, 0, 1, .true., .false., .false., .true.,.true., 'anim', &
                0.0d0, (/0.0d0/), (/0.0d0/), (/0.0d0/),0.0d0,1.0d0,plotval)
@@ -436,7 +459,7 @@ CONTAINS
           call bsolve(k,lambda1)
        case(2) ! mekanisme med "hardcoded" temp-stigning, givet ved t_elem
           antype = 'TOPTHERMSTRUCT_hard'
-          call buildload(rho,rho_min) ! den termiske last er designafh�ngig=> Pt = [B]*[C(rho)]*[alpha]*dT
+          call buildload(rho,rho_min) ! den termiske last er designafhï¿½ngig=> Pt = [B]*[C(rho)]*[alpha]*dT
           call displ(flag,rho,rho_min)
           compliance_out(i) = DOT_PRODUCT(d,L) ! Compliance for force inverter
           lambda1 = L
@@ -455,14 +478,14 @@ CONTAINS
           call object_sens_t(flag,rho,rho_min,compliance,dc) ! object and gradient
           compliance_out(i) = compliance
           dg = vol/max_vol
-       case(6) ! geometrisk ikke-line�r
+       case(6) ! geometrisk ikke-lineï¿½r
           call non_lin(flag,rho,rho_min) ! #6, solve system
           compliance_out(i) = DOT_PRODUCT(d,L) ! Compliance for force inverter
           ! SOLVE
           lambda1 = L
-          ! bem�rk at k er tangent stiffness
+          ! bemï¿½rk at k er tangent stiffness
           call bsolve(k,lambda1)
-       case(7)! mekanisme med begr�nsning p� krydsbev�gelse
+       case(7)! mekanisme med begrænsning på krydsbevægelse
           call displ(flag,rho,rho_min) ! #6, solve system
           compliance_out(i) = DOT_PRODUCT(d,L) ! Compliance for force inverter
           ! SOLVE
@@ -493,7 +516,7 @@ CONTAINS
              compliance_mat(i,j) = constraint(j)
           end do
           constraint = constraint + 10d0 ! pga mma
-          compliance_out(i) = maxval(constraint) ! Compliance er maxv�rdien af de tre compliance
+          compliance_out(i) = maxval(constraint) ! Compliance er maxvï¿½rdien af de tre compliance
        case(10) ! Elevator
           call displ(flag,rho,rho_min) ! #6, solve system
           do j=1,2
@@ -514,43 +537,84 @@ CONTAINS
           do e=1,ne
              dg(e) = vol(e)/max_vol
           end do
-          compliance_out(i) = maxval(constraint) ! Compliance er maxv�rdien af de tre compliance
+          compliance_out(i) = maxval(constraint) ! Compliance er maxværdien af de tre compliance
        case(12)! eigenfrequency
+          na = ne_aktiv
+          n = na +1
           call build_mvec(rho) !build mass-vector
           if (elem_type == 'PLATE_GMSH') then
-             call buildstiff_plate(rho,rho_min)
+             call buildstiff_eigenvalue_piezo(shift,rho,rho_min)
+             !call buildstiff_plate(rho,rho_min)
           else
              call buildstiff_fea(0,rho,rho_min)
           end if
 
-          if (i == 1) then
+          if (iter == 1) then
              call mumps_solve_real(1)! symbolic factorizing
           end if 
           call mumps_solve_real(2)! numerical factorizing
-          call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,n_conv,eigenval,eigenvec)
+          call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,nnz_ub, &
+               n_conv,eigenval,eigenvec)
 
-          Compliance_out(i) = - MINVAL(eigenval(:,1))          
-          do j=1,nc-1
-             constraint(j) = -eigenval(j,1) - Compliance_out(i)
+          ! scale eigenvector. The derivations of constraints require that \phi^T * [M] * \phi = 1
+          do j = 1,n_eigen
+             eigenvec(:,j) = eigenvec(:,j)/ &
+                  SQRT( DOT_PRODUCT(eigenvec(:,j),mvec*eigenvec(:,j)) )
           end do
+          
+
+          if (iter == 1) then
+             if (scale) then
+                xval(n) = log(1.0 / eigenval(1,1)) +100
+             else
+                xval(n) = eigenval(1,1)
+             end if
+             xval_old(n) = xval(n)! beta from MMA
+             xval_old2(n) = xval(n)
+          end if
+          if ( scale ) then
+             !Compliance_out(i) = log( 1.0/xval(n) )
+             compliance_out(i) = xval(n)
+             Compliance_out(i) =Compliance_out(i) +100 ! Make sure that compliance is negative
+          else
+             compliance_out(i) = - xval(n)
+          end if
+
+          print*,'xval(n): ',xval(n)
+          do j=1,nc-1 ! for all eigenvalue constraint
+             ! scale constraint
+             constraint(j) = xval(n)/eigenval(j,1)-1
+             print*,'constraint: ',constraint(j)
+             ! Constraint skaleres når gradienten er udregnet
+          end do
+          do j=1,nc-1
+            ! print*,'eigenval: ', eigenval(j,1)
+          end do
+          
+
        end select
 
        if (( MOD(iter,50) == 0 ) .OR. ( iter == 1 )) then
           f_scale = 1d0!dabs(compliance_out(i))
        end if
 
+
        ! CALCULATION OF THE GRADIENTS:
        select case( problem_type )
        case(0) ! statik
           call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg) ! #7
+          dobject = dc
        case(1:2,6) !force_inverter
           call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg, lambda1)
+          dobject = dc
        case(3) ! koblet mekanisme
           call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg, lambda1,lambda2)
-       case(7)!mekanisme med begr�nsning p� krydsbev�gelsen
+          dobject = dc
+       case(7)!mekanisme med begrænsning på krydsbevægelsen
           call gradient(flag,problem_type,inak,D,rho,rho_min, dc,vol,max_vol, dg, lambda1,lambda2,dc_filter)! dc_filter er dc_hat
           dconstraint(:,1) = 2 * (DOT_PRODUCT(L2,D)/DOT_PRODUCT(L,D)) * (dc_filter*DOT_PRODUCT(L,D) - &
                DOT_PRODUCT(L2,D)*dc)/DOT_PRODUCT(L,D)**2
+          dobject = dc
        case(8)! min(max(compliance))
           do j=1,nk
              call gradient(flag,problem_type,inak,D_mat(:,j),rho,rho_min, dc,vol,max_vol, dg)
@@ -575,26 +639,50 @@ CONTAINS
                   *(dconstraint(e,1)-dconstraint(e,2))
           end do
           problem_type = 10
+          dobject = dc
        case(12) ! eigenfrequency
           call compare_eigenval(eigenval(:,1),list)
           if(list(1) /= 0) then ! double eigenfrequency
              call gradient(flag,problem_type,inak,(/0d0/),rho,rho_min,&
                   dc,dc2= dconstraint(:,list(2)), &
-                  eigenval=eigenval(list(1),1), eigenvec_d=eigenvec(:,list),double_eigen=.true.)
+                  eigenval=eigenval(list(1),1), eigenvec_d=eigenvec(:,list), double_eigen=.true.)
              dconstraint(:,list(1)) = dc
              
           end if
+          na = ne_aktiv
+
           do j=1,nc-1
              if ((j == list(1) ).or. (j==list(2))) cycle
-             
+
              call gradient(flag,problem_type,inak,(/0d0/),rho,rho_min, dc,&
                   eigenval=eigenval(j,1), eigenvec=eigenvec(:,j),double_eigen=.false.)
-             dconstraint(:,j) = -dc
+
+             if (scale) then
+                dconstraint(1:na,j) = -1.0/constraint(j)*dc
+                dconstraint(na+1,j) = 1.0/constraint(j)*1d0
+             else
+                dconstraint(1:na,j) = -dc
+                dconstraint(na+1,j) = 1d0
+             end if
+
           end do
-          dconstraint(:,nc) = vol/max_vol !dg, skaleret volumen
-          dc = -1d0
+
+          dconstraint(1:na,nc) = vol/max_vol !dg, skaleret volumen
+          dconstraint(na+1,nc) = 0d0
+
+          if (scale) then
+             dobject = 0d0
+             dobject(na+1) = -1.0/xval(na+1) !afledte mht beta
+             constraint = log(constraint)
+          else
+             dobject = 0d0
+             dobject(na+1) = -1d0 !afledte mht beta
+          end if
+          
+
+
           do j=1,nc-1
-             dconstraint(:,j) = dconstraint(:,j) - dc
+             !dconstraint(:,j) = dconstraint(:,j) 
           end do
        end select
 
@@ -602,27 +690,33 @@ CONTAINS
        ! Finite difference check for sensitivity
        select case( fd_check )
        case( 1 )
-          if  (iter == 2) then!( MOD(iter,5) == 1 ) then
-             select case (filter_type)
-             case (4)! Robust
-                problem_type = 1 ! kun for problem (9) med samme gradienter som (1)
-                call finite_check(flag, problem_type,inak, filter_type,vol,max_vol,& 
-                     rho_mat,rho_min,L,lambda_mat(:,3),dc,df_approx,f_scale,beta,eta(3))
-                problem_type = 9
-             case default
-                select case (problem_type)
-                case(10)
-                   call finite_check(flag, problem_type,inak, filter_type,vol,&
-                        max_vol,rho_mat,rho_min,L,lambda1,dc, df_approx,&
-                        f_scale,beta,0d0, Lmulti=Lmulti)
-                case default
-                   call finite_check(flag, problem_type,inak, filter_type,vol,max_vol,&
-                        rho_mat,rho_min,L,lambda1,dc, df_approx,f_scale,beta)
-                end select
-             end select
-             call output_matrix(df_approx,'finite_diff_tjeck')
+          if (iter == 1) then
+          ! kun for eigen
+             call finite_check_eigen(problem_type,inak,filter_type,vol,max_vol, rho,rho_min, &
+                  f_scale,dconstraint(1:na,1))
 
           end if
+
+          ! if  (iter == 2) then!( MOD(iter,5) == 1 ) then
+          !    select case (filter_type)
+          !    case (4)! Robust
+          !       problem_type = 1 ! kun for problem (9) med samme gradienter som (1)
+          !       call finite_check(flag, problem_type,inak, filter_type,vol,max_vol,& 
+          !            xval(1:n),rho_min,L,lambda_mat(:,3),dobject,df_approx,f_scale,beta,eta(3))
+          !       problem_type = 9
+          !    case default
+          !       select case (problem_type)
+          !       case(10)
+          !          call finite_check(flag, problem_type,inak, filter_type,vol,&
+          !               max_vol,xval(1:n),rho_min,L,lambda1,dobject, df_approx,&
+          !               f_scale,beta,0d0, Lmulti=Lmulti)
+          !       case default
+          !          call finite_check(flag, problem_type,inak, filter_type,vol,max_vol,&
+          !               xval(1:n),rho_min,L,lambda1,dobject, df_approx,f_scale,beta)
+          !       end select
+          !    end select
+          !    call output_matrix(df_approx,'finite_diff_tjeck')
+          ! end if
        end select
 
 
@@ -651,33 +745,38 @@ CONTAINS
           end select
        end select
 
+
        ! Finding rho by bi-section or MMA method:
        select case( solver_type ) ! #9
        case(1)
-          rho_old = rho
-          call oc(filter_type,max_vol,vol,rho,rho_old,dc,dg)
+          xval_old = xval
+          call oc(filter_type,max_vol,vol,xval(1:n),xval_old(1:n),dc,dg)
        case(2)
           ! rho er de fysiske densiteter(dvs de der kommer fra densitetsfilteret).
-          rho_tilde = rho ! fysiske densiteter. Skal bruges til at beregne den aktuelle volumen i MMA-handle
-          rho = rho_mat ! MMA skal have den "oprindelige" rho ind og ikke rho_hat.
+          !rho_tilde = rho ! fysiske densiteter. Skal bruges til at beregne den aktuelle volumen i MMA-handle
+          !rho = rho_mat ! MMA skal have den "oprindelige" rho ind og ikke rho_hat.
+          ! da det er rho og ikke xval der filtreres, skal der ikke gøres noget ved xval
+
+
           compliance = compliance_out(i)/f_scale
-          dc = dc/f_scale
+          dobject = dobject/f_scale
 
           select case(problem_type)
           case default
-             call mma_handle(iter,inak,low,upp,max_vol,compliance,vol,rho, rho_old, rho_old2,dc,dg,&
-                  rho_tilde,1,movelimit)
-          case(7,12)! mekanisme med begr�nsning p� krydsbev�gelse
-             call mma_handle(iter,inak,low,upp,max_vol,compliance,vol,rho, rho_old, rho_old2, dc, dg, &
-                  rho_tilde,nc ,movelimit, constraint, dconstraint)
+             dobject = dc
+             call mma_handle(iter,inak,rho_min,low,upp,max_vol,compliance,vol,xval, xval_old, xval_old2,dobject,dg,&
+                  rho,1,movelimit)
+          case(7,12)! mekanisme med begrænsning på krydsbevægelse
+             call mma_handle(iter,inak,rho_min,low,upp,max_vol,compliance,vol,xval, xval_old, xval_old2, dobject, (/0d0/), &
+                  rho,nc ,movelimit, constraint, dconstraint)
           case(8)! min(max(compliance))P = P1
              compliance = 0d0
              dc = 0d0
              dconstraint = dconstraint / f_scale
              constraint = constraint / f_scale ! skalering af compliance
              dconstraint(:,nc) = dg
-             call mma_handle(iter,inak,low,upp,max_vol,compliance,vol,rho, rho_old, rho_old2,dc,dg,&
-                  rho_tilde,nc,movelimit,constraint,dconstraint) ! korrigeret, da g ,dconstraintensitetsfilteret
+             call mma_handle(iter,inak,rho_min,low,upp,max_vol,compliance,vol,xval, xval_old, xval_old2,dc,dg,&
+                  rho,nc,movelimit,constraint,dconstraint) ! korrigeret, da g ,dconstraintensitetsfilteret
           case(9,11)! Robust design
              compliance = 0d0
              dc = 0d0
@@ -685,10 +784,12 @@ CONTAINS
              dconstraint = dconstraint / f_scale
              constraint = constraint / f_scale ! skalering af compliance
              dconstraint(:,nc) = dg
-             call mma_handle(iter,inak,low,upp,max_vol,compliance,vol,rho, rho_old, rho_old2,dc,dg,&
+             call mma_handle(iter,inak,rho_min,low,upp,max_vol,compliance,vol,xval, xval_old, xval_old2,dc,dg,&
                   rho_bar(:,1), nc, movelimit, constraint, dconstraint) ! korrigeret, da g ,dconstraintensitetsfilteret
           end select
        end select
+
+       rho = xval(1:na)
        ! do e=1,ne
        !    if (rho(e) < 0) then
        !       print*,'efter mma'
@@ -696,11 +797,11 @@ CONTAINS
        !    end if
        ! end do
 
-       change = maxval(abs(rho_old - rho))
+       change = maxval(abs(xval_old(1:na) - rho))
 
        select case (filter_type)
        case( 1:2 )
-          ! STOP CRITERIA (P� s�dvanlig vis)
+          ! STOP CRITERIA (På sædvanlig vis)
           select case(stop_krit)
           case(1)
              if ( ( change < tol*maxval(abs(rho)) ) .and.  (i > 40) ) then
@@ -709,7 +810,7 @@ CONTAINS
           end select
        case( 3:4 )
           select case (filter_type)
-          case(4) ! opdater volumen-begr�nsning
+          case(4) ! opdater volumen-begrï¿½nsning
              if (  MOD(iter,30) == 1 ) then
                 max_vol = dot_product(rho_bar(:,1),vol) * max_vol_start/dot_product(rho_bar(:,2),vol)
              end if
@@ -718,7 +819,7 @@ CONTAINS
           !if ( ( ( MOD(iter,50) == 0 )  .or. ( change < 0.01  ) ) .and. ( beta < 200 ) .and. (iter > 40) ) then ! overvej at bruge tolerance
           if ( ( ( MOD(iter,70) == 0 ) ) .and. ( beta < 200 ) ) then ! overvej at bruge tolerance
              beta = 1.3d0*beta
-             change = 0.5 ! Lader iterationsprocessen l�be lidt l�ngere med ny beta.
+             change = 0.5 ! Lader iterationsprocessen lï¿½be lidt lï¿½ngere med ny beta.
           end if
           ! STOP CRITERIA (Med Heavyside)
           select case(stop_krit)
@@ -758,9 +859,9 @@ CONTAINS
           print*,'----------------------------------'
           print*,'compliance = ',compliance_out(i)
           print*,'mma_compliance = ',compliance
-          print*,'iter = ',i
-          print*,'Volumen = ',dot_product(rho,vol) ! volumen udregnes med "fysisk" densitet
-          print*,'change = ',maxval(abs(rho_old - rho))
+          print*,'iter = ',iter
+          !print*,'Volumen = ',dot_product(rho,vol) ! volumen udregnes med "fysisk" densitet
+          !print*,'change = ',maxval(abs(xval_old(1:na) - rho))
           print*,'tolerance = ',tol*maxval(abs(rho))
           print*,'max dc',maxval(dc)
           print*,'max dg',maxval(dg)
@@ -773,7 +874,7 @@ CONTAINS
 
 
     ! Computation of filteret densities rho_hat
-    ! overvej om ikke denne skal flyttes efter MMA, s�ledes kaldet i begyndelsen kan fjernes
+    ! overvej om ikke denne skal flyttes efter MMA, sï¿½ledes kaldet i begyndelsen kan fjernes
 
     select case (filter_type) ! En sidste densitetsfiltrering: "matematisk" rho fra MMA -> "fysisk" rho
     case( 2 )
@@ -814,11 +915,11 @@ CONTAINS
     select case( save_rho)
     case(1) ! udskriv rho
        call output_vector(rho,trim(filename)//'_rho')
-       ! Indl�s rho med nedenst�ende
+       ! Indlï¿½s rho med nedenstï¿½ende
        !$$$$$$     call rho_input(rho_vec,trim(filename)//'dir\'//trim(filename)//'_rho'//'.m')
     end select
 
-    ! procent gr�skala. Formel fra sigmund_filterartikel
+    ! procent gråskala. Formel fra sigmund_filterartikel
     Mnd = 0.0d0
     do e=1,ne_aktiv
        Mnd =Mnd+ 4*rho(e)*(1d0 - rho(e))
@@ -911,7 +1012,7 @@ CONTAINS
 
     ! MMA 
     REAL(8), DIMENSION(ne):: low, upp, rho, rho_old, rho_old2, dg, dc
-    ! bem�rk at dc = d_xi
+    ! bemï¿½rk at dc = d_xi
 
     real(8) :: f_scale
 
@@ -921,7 +1022,7 @@ CONTAINS
     ! ##############################
     ! Her starter du
     file = 1			! 1 : longsving2		2: disk
-    output_type = 1		! 1 : udskriv forskydning for hvert tidsskridt, !	2 : udskriv forskydning for udvalgt DOF, !	3 : udskriv forskydning for alle centerknuder, ! 4 : udskriv energi i bj�lken
+    output_type = 1		! 1 : udskriv forskydning for hvert tidsskridt, !	2 : udskriv forskydning for udvalgt DOF, !	3 : udskriv forskydning for alle centerknuder, ! 4 : udskriv energi i bjï¿½lken
     loes_type= 2		! 1 : Transient			2: TopOpt
     animation = 0 		! 1 : Til !				0: fra
     !$$$$$$     flag = 1            ! Benyttes kun ved transient. 0 : fra   1 : alle elementer er ens
@@ -931,8 +1032,8 @@ CONTAINS
     fd_check   	= 0		! 0: Fra				1: Finite difference check
     info 		= 1		! information
     problem_type = 5	! 0: Fra				3: bandgap
-    rand = 1			! 0: ingen d�mpning		1: d�mp h�jre side	2: d�mp venstre og h�jre	4: d�mp alle sider
-    normal = 1 ! er b�lgeretningen normal p� fladen?	0: nej	1: ja
+    rand = 1			! 0: ingen dï¿½mpning		1: dï¿½mp hï¿½jre side	2: dï¿½mp venstre og hï¿½jre	4: dï¿½mp alle sider
+    normal = 1 ! er bï¿½lgeretningen normal pï¿½ fladen?	0: nej	1: ja
 
     !call initial_transient
     if (present(rho_in)) then
@@ -950,7 +1051,7 @@ CONTAINS
     L = 0d0
     if (nd> 0) then
        do i = 1, nd
-          ! find dof og inds�t i L
+          ! find dof og indsï¿½t i L
           idof = 2*(nodes(i, 1)-1)+nodes(i, 2)
           L(idof) = 1.0d0
        end do
@@ -960,8 +1061,8 @@ CONTAINS
 
     call elements_init(file,L) ! find elementer i enderne
 
-    ! s�tter inaktive elementer
-    ! Nb udkommenteret. SKal sl�s til igen
+    ! sï¿½tter inaktive elementer
+    ! Nb udkommenteret. SKal slï¿½s til igen
     !$$$$$$     value = 0.5d0
     !$$$$$$     call inactive_elements(rho,value)
 
@@ -1025,7 +1126,7 @@ CONTAINS
        !$$$$$$     end if
 
        ! Solve the transient problem
-       parameters(1) = file ! skal v�re her, da den nulstilles senere i l�kken
+       parameters(1) = file ! skal vï¿½re her, da den nulstilles senere i lï¿½kken
        call half_step_CD(parameters,parameters_real,flag,deltaT,rho,U0,dotU0,saved_U)
 !!!!! Efter time-integration !!!!
        ! STEP 2
@@ -1040,7 +1141,7 @@ CONTAINS
 
        end do
        objekt = (deltaT)/(2.0d0) * objekt
-       ! Bem�rk at trapezreglen hedder (b-a)/(2*N) * (f(x1)+2*f(x2)+...+2*f(x_N-1)+f(x_N))
+       ! Bemï¿½rk at trapezreglen hedder (b-a)/(2*N) * (f(x1)+2*f(x2)+...+2*f(x_N-1)+f(x_N))
        ! Her er (b-a)/(2N) = deltaT*real(nmax)/(2*real(nmax))=deltaT/2 
        objekt_out( iter ) = objekt ! opr. objekt til plot
        print*,'objekt',objekt
@@ -1051,13 +1152,13 @@ CONTAINS
        end if
 
 
-       ! Jf ovenst�ende er G = d(neqn-1)^2, dvs dG/du = 2*d(neqn-1).
-       ! Pga variabel-transformationen tau = T(slut-tid)-t, integres fra tau = T g�ende mod tau = 0
+       ! Jf ovenstï¿½ende er G = d(neqn-1)^2, dvs dG/du = 2*d(neqn-1).
+       ! Pga variabel-transformationen tau = T(slut-tid)-t, integres fra tau = T gï¿½ende mod tau = 0
 
-       ! Pr�v at flytte nedenst�ende ind i objekt-l�kken. M�ske er det hurtigere.
+       ! Prï¿½v at flytte nedenstï¿½ende ind i objekt-lï¿½kken. Mï¿½ske er det hurtigere.
        ! Dette er dG. Af "plads-hensyn" kaldes den saved_lambda
        saved_lambda = 0.0d0
-       do n=0,nmax-1 ! bem�rk "k�rer" bagl�ns
+       do n=0,nmax-1 ! bemï¿½rk "kï¿½rer" baglï¿½ns
           !$$$$$$       do i=1,size(dof_x,1)
           !$$$$$$         saved_lambda(dof_x(i),n+1) = (2.0d0*saved_U(dof_x(i),nmax-n)) ! Objektfunktion forholder sig kun til sidste knude.
           saved_lambda(:,n+1) = (2.0d0* L *saved_U(:,nmax-n)) ! Objektfunktion forholder sig kun til sidste knude.
@@ -1142,7 +1243,7 @@ CONTAINS
 
        objekt=objekt/f_scale ! skaleret objekt til mma
        dc = dc/f_scale
-       call mma_handle(iter,inak,low,upp,0.0d0,objekt,(/0.0d0/),rho,rho_old,rho_old2,dc,dg,(/0.0d0/),1) ! STEP 5
+       call mma_handle(iter,inak,rho_min,low,upp,0.0d0,objekt,(/0.0d0/),rho,rho_old,rho_old2,dc,dg,(/0.0d0/),1) ! STEP 5
        call inactive_elements(rho,value)
        call  plotanim(iter, 0, 1, .true., .false., .false., .true.,.true., 'Udboej', &
                0.0d0, (/0.0d0/), (/0.0d0/), (/0.0d0/),0.0d0,1.0d0,rho)
@@ -1158,7 +1259,7 @@ CONTAINS
        select case( save_rho)
        case(1) ! udskriv rho
           call output_vector(rho,trim(filename)//'_rho')
-          ! Indl�s rho med nedenst�ende
+          ! Indlï¿½s rho med nedenstï¿½ende
           !$$$$$$     call rho_input(rho_vec,trim(filename)//'dir\'//trim(filename)//'_rho'//'.m')
        end select
     end select
@@ -1184,7 +1285,7 @@ CONTAINS
        e2 = 0
        kk = 0
        n = 2 ! "lag" af inaktive elementer = n+1, dvs n=2 giver 3 inaktive elementer
-       !n = 39 ! til st�nger, dvs aflevering specialkursus
+       !n = 39 ! til stï¿½nger, dvs aflevering specialkursus
        !n = 59! til plots
        do e=1,ne
           do i = 1, SIZE(element_rand,1) ! Arbsorbing BC's
@@ -1193,14 +1294,14 @@ CONTAINS
                 select case(element_rand(i,2))!face
                 case(1) ! face 1(bottom of structure)
                    rho(e:e+n) = value
-                case(2) ! h�jre side
-                   if (e1 ==0) then ! finder f�rste element i h�re side. Dvs det nederste
+                case(2) ! hï¿½jre side
+                   if (e1 ==0) then ! finder fï¿½rste element i hï¿½re side. Dvs det nederste
                       e1 = e
                    end if
-                   kk = kk+1! t�ller antal elementer i h�jden
+                   kk = kk+1! tï¿½ller antal elementer i hï¿½jden
                 case(3) ! top
                    rho(e-n:e) = value
-                case(4) ! finder sidste element i venstre side. Dvs det �verste
+                case(4) ! finder sidste element i venstre side. Dvs det ï¿½verste
                    if (e>e2) then
                       e2 = e
                    end if

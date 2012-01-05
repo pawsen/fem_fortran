@@ -4,7 +4,9 @@ module fea
 
   private
   public :: displ, initial_fea, buildload, buildstiff_fea, enforce_fea, recover, volume, areal
-  public :: buildmass_fea, mmul_fea, build_mvec, mvec_mul, eigen, assemble_sparse
+  public :: buildmass_fea, mmul_fea, build_mvec, mvec_mul, eigen
+
+  public :: assemble_sparse, sparse_add_lagrangian
 
 
 contains
@@ -63,19 +65,13 @@ contains
 
     if (banded ==  2) then ! sparse format with lagrangian multiplier
 
-
-       if ( ((antype == 'EIGEN') .and.  (eigenvalue%shift .eqv. .false.)) .or. &
-            ( antype == 'TOPSTRUCT_EIGEN') ) then
+       if ( ((antype == 'EIGEN') .and.  (eigenvalue%shift .eqv. .false.)) ) then
           neqn_nb = neqn
           nzz = 8*8*ne
-          nzz2 = nzz + 2*nb ! til debug
-          print*,'AAA'
        else
-          print*,'BBBCCCBBB'
           neqn_nb = neqn+nb
-          nzz = 8*8*ne+2*nb !8*8*ne is the number of times the local stiffness matrix adds a value to the global(including dublicates, eg. is't not nz(number of non-zeros)). Because of lagrangien multiplier there is added xtra two non-zero entries for each RB
-          print*,'allokering, normal fea'
-          nzz2 = nzz! til debug
+          nzz = 8*8*ne+2*nb 
+          !8*8*ne is the number of times the local stiffness matrix adds a value to the global(including dublicates, eg. is't not nz(number of non-zeros)). Because of lagrangien multiplier there is added xtra two non-zero entries for each RB
        end if
 
        if (antype /= 'EIGEN') then
@@ -83,7 +79,6 @@ contains
        end if
 
        allocate (iK(nzz),jK(nzz),sK(nzz))
-       allocate (iK2(nzz2),jK2(nzz2),sK2(nzz2))
     else! normalt
        allocate (p(neqn), d(neqn))
     endif
@@ -171,7 +166,7 @@ contains
 
        call exodus_init
        call exodus_write_node(1,d)
-       call exodus_write_time(1,1.)
+       call exodus_write_time(1,1.0d0)
        call exodus_finalize
 
        call output !linux_fejl
@@ -432,22 +427,7 @@ contains
 
     !add values from lagrangian multipliers. BUT not if it's a eigenvalue problem vithout shift
     if ( banded == 2 .and. ((antype /= 'EIGEN') .or. eigenvalue%shift)) then
-       do i=1,nb
-          if (bound(i,2) /= 3) then! bound(i,2) = 3 => temp p� randen
-             idof = 2*(bound(i,1)-1) + bound(i,2)
-             ! nederste matrix
-             ii = ii+1
-             iK(ii) = neqn+i
-             jK(ii) = idof
-             sK(ii ) = 1
-             ! matrix to the right
-             ii = ii+1
-             iK(ii) = idof
-             jK(ii) = neqn+i
-             sK(ii ) = 1
-          end IF
-       end do
-
+       call sparse_add_lagrangian(2,ii)
     end if
 
     !¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤
@@ -499,6 +479,37 @@ contains
 
   end subroutine assemble_sparse
 
+  subroutine sparse_add_lagrangian(kk,ii)
+
+    use fedata
+    
+    integer, intent(in) :: kk
+    integer, intent(inout) :: ii
+    integer :: idof, i, jj
+    
+    ! UPS: bound(i,3) is used both for temp and moments for plates. Stupid!
+
+    jj = 0
+    do i=1,nb
+       if ((bound(i,2) < 6) .and. &! forskydning
+            ((kk /= 2) .or. (bound(i,2) /= 3) )  ) then ! bound(i,2) = 3 => temp på randen
+          jj = jj +1
+          idof = 3*(bound(i,1)-1) + bound(i,2)
+          ! nederste matrix
+          ii = ii+1
+          iK(ii) = neqn+jj
+          jK(ii) = idof
+          sK(ii ) = 1d0
+          ! matrix to the right
+          ii = ii+1
+          iK(ii) = idof
+          jK(ii) = neqn+jj
+          sK(ii ) = 1d0
+       end if
+    end do
+
+  end subroutine sparse_add_lagrangian
+
 
   subroutine buildmass_fea(flag,rho,rho_min)
 
@@ -546,9 +557,9 @@ contains
        do i = 1, 2*nen
           do j =1, 2*nen
              ii = ii+1
-             iK2(ii) = edof(i)
-             jK2(ii) = edof(j)
-             sK2(ii) = me(i,j)
+             ! iK2(ii) = edof(i)
+             ! jK2(ii) = edof(j)
+             ! sK2(ii) = me(i,j)
 
              !sK2(ii) = me_lumped(i,j)
           end do
@@ -560,14 +571,14 @@ contains
           idof = 2*(bound(i,1)-1) + bound(i,2)
           ! nederste matrix
           ii = ii+1
-          iK2(ii) = neqn+i
-          jK2(ii) = idof
-          sK2(ii ) = 1
-          ! matrix to the right
-          ii = ii+1
-          iK2(ii) = idof
-          jK2(ii) = neqn+i
-          sK2(ii ) = 1
+          ! iK2(ii) = neqn+i
+          ! jK2(ii) = idof
+          ! sK2(ii ) = 1
+          ! ! matrix to the right
+          ! ii = ii+1
+          ! iK2(ii) = idof
+          ! jK2(ii) = neqn+i
+          ! sK2(ii ) = 1
        end IF
     end do
 

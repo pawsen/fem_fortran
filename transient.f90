@@ -25,7 +25,7 @@ contains
     ! half bandwidth, etc and allocates global arrays.
 
     ! Calculate number of equations
-    bw=0 ! giver bw en v�rdi til if-s�tningen
+    bw=0 ! giver bw en vï¿½rdi til if-sï¿½tningen
     neqn = 2*nn
     select case(flag)
     case(0)  
@@ -33,7 +33,7 @@ contains
           allocate (k(neqn, neqn))
        elseif(banded == 1)then !allocate k=banded
           do e=1,ne
-             nen = element(e)%numnode ! Antallet af knudepunkter i �t element
+             nen = element(e)%numnode ! Antallet af knudepunkter i ï¿½t element
              do n = 1, nen !nen = number of element nodes. Just for Yuriy
                 edof(2*n-1) = 2 * element(e)%ix(n) - 1  !dof for element e, knude n. i x-retning
                 edof(2*n)   = 2 * element(e)%ix(n)  !dof for element e, knude n. i x-retning
@@ -125,10 +125,10 @@ contains
        call buildmass(flag,rho,M) ! bruges til beregning af energi
     case(0)
        call buildstiff_fea(flag,rho)
-       call buildmass(flag,rho,M)! 0 fort�ller at elementerne ikke er ens
+       call buildmass(flag,rho,M)! 0 fortï¿½ller at elementerne ikke er ens
     end select
 
-    ! HUSK RB p� M!!!!!!!! VIGTIGT !!!!!!
+    ! HUSK RB pï¿½ M!!!!!!!! VIGTIGT !!!!!!
     select case(file)
     case(2)
        !call explosive_source(radius,center,g)
@@ -253,27 +253,27 @@ contains
        MDprev = (1.0d0/deltaT**2)*MDprev
 
        select case(rand) 
-       case(0) ! inegn d�mpning
+       case(0) ! inegn dï¿½mpning
        case default
           select case(normal)
           case(0) ! punktkilde, dvs ekstra stivhed ligges til
              !$$$$$$                 call abs_init(Dcurr,center)
-             call abs_mmul(0,0,rho,Dcurr,CDcurr,r_int_Z) ! d�mpning fra abs. rand
-             call abs_mmul(0,0,rho,Dcurr,CDcurr) ! d�mpning fra abs. rand
+             call abs_mmul(0,0,rho,Dcurr,CDcurr,r_int_Z) ! dï¿½mpning fra abs. rand
+             call abs_mmul(0,0,rho,Dcurr,CDcurr) ! dï¿½mpning fra abs. rand
              CDcurr = CDcurr/deltaT
              call abs_mmul(0,0,rho,Dprev,CDprev)	
              CDprev = CDprev/deltaT
 
              r_int = r_int + r_int_Z
           case(1)
-             call abs_mmul(0,1,rho,Dcurr,CDcurr) ! d�mpning fra abs. rand
+             call abs_mmul(0,1,rho,Dcurr,CDcurr) ! dï¿½mpning fra abs. rand
              CDcurr = CDcurr/deltaT
              call abs_mmul(0,1,rho,Dprev,CDprev)	
              CDprev = CDprev/deltaT
           case(2) ! punktkilde, dvs ekstra stivhed ligges til
              !$$$$$$                 call abs_init(Dcurr,center)
-             call abs_mmul(0,0,rho,Dcurr,CDcurr) ! d�mpning fra abs. rand
-             call abs_mmul(0,0,rho,Dcurr,CDcurr) ! d�mpning fra abs. rand
+             call abs_mmul(0,0,rho,Dcurr,CDcurr) ! dï¿½mpning fra abs. rand
+             call abs_mmul(0,0,rho,Dcurr,CDcurr) ! dï¿½mpning fra abs. rand
              CDcurr = CDcurr/deltaT
              call abs_mmul(0,0,rho,Dprev,CDprev)	
              CDprev = CDprev/deltaT
@@ -289,7 +289,7 @@ contains
        Dcurr = vec_rhs/mlumped   
        dotD = ( Dcurr - Dprev2 ) / ( 2.0d0*deltaT )! (11.12-1a)
 
-       ! beregn plot-v�rdi
+       ! beregn plot-vï¿½rdi
        D = Dcurr ! plotanim skal have forskydninger for D
        do e = 1, ne
           nen = element(e)%numnode
@@ -298,7 +298,7 @@ contains
              edof(2*i)   = 2 * element(e)%ix(i)
           end do
           plotval(e) = dsqrt(dot_product(Dcurr(edof),Dcurr(edof)))
-          !plotval(e) = 0!(stress(e,1)**2+stress(e,2)**2-stress(e,1)*stress(e,2)+3.0*stress(e,3)**2)**(0.50d0) !von mises sp�nding
+          !plotval(e) = 0!(stress(e,1)**2+stress(e,2)**2-stress(e,1)*stress(e,2)+3.0*stress(e,3)**2)**(0.50d0) !von mises spï¿½nding
        end do
 
        select case ( animation )
@@ -311,14 +311,14 @@ contains
                 edof(2*i)   = 2 * element(e)%ix(i)
              end do
              plotval(e) = dsqrt(dot_product(Dcurr(edof),Dcurr(edof)))
-             !plotval(e) = 0!(stress(e,1)**2+stress(e,2)**2-stress(e,1)*stress(e,2)+3.0*stress(e,3)**2)**(0.50d0) !von mises sp�nding
+             !plotval(e) = 0!(stress(e,1)**2+stress(e,2)**2-stress(e,1)*stress(e,2)+3.0*stress(e,3)**2)**(0.50d0) !von mises spï¿½nding
           end do
           call  plotanim(n, 0, 1, .true., .true., .false., .true.,.true., 'Udboej', &
               0.0d0, (/0.0d0/), (/0.0d0/), (/0.0d0/),0.0d0,1d0,rho)
        end select
 
        select case ( loes_type )
-       case ( 1 ) ! Transient l�sning
+       case ( 1 ) ! Transient lï¿½sning
           select case ( output_type )
           case ( 1 )
              dev = 5
@@ -351,8 +351,8 @@ contains
                 !print*,'midterknude-endelig',midterknude
              case ( 3 ) ! udskriver forskydning for alle center DOF i x-retning
                 call output_center(Dcurr(center_dofs_x),n,nmax,deltaT,rho)
-             case ( 4 ) ! udskriver "energien" i bj�lken
-                ! HUSK r_int = K*Dprev, Derfor skal det ogs� v�re Dprev herunder
+             case ( 4 ) ! udskriver "energien" i bjï¿½lken
+                ! HUSK r_int = K*Dprev, Derfor skal det ogsï¿½ vï¿½re Dprev herunder
                 if (n>1) then
                    output_vec(n-1) = 0.50d0*DOT_PRODUCT(dotD,M*dotD) + 0.50d0*DOT_PRODUCT(Dprev,r_int) !
                    output_kin(n-1) = 0.50d0*DOT_PRODUCT(dotD,M*dotD) !
@@ -367,10 +367,10 @@ contains
 
           if (present(saved_U)) then
              saved_U(:,n) = Dcurr
-             ! Da dotD og ddotD ikke l�ngere gemmes og sendes tilbage til topology er nedenst�ende ikke l�ngere n�dvendigt og derfor udkommenteret
+             ! Da dotD og ddotD ikke lï¿½ngere gemmes og sendes tilbage til topology er nedenstï¿½ende ikke lï¿½ngere nï¿½dvendigt og derfor udkommenteret
 
-             ! dotD og ddotD beregnes begge p� baggrund af bl.a. D_n+1. Derfor k�res l�kken nmax+1 gange og derfor f�lgende:
-             ! bem�rk at for n haves: D_n, dotD_n-1 og ddotD_n-1. Derfor gemmes n=nmax+1 ikke for D.
+             ! dotD og ddotD beregnes begge pï¿½ baggrund af bl.a. D_n+1. Derfor kï¿½res lï¿½kken nmax+1 gange og derfor fï¿½lgende:
+             ! bemï¿½rk at for n haves: D_n, dotD_n-1 og ddotD_n-1. Derfor gemmes n=nmax+1 ikke for D.
 
              !$$$$$$         if (n == nmax +1) then
              !$$$$$$         ! dette er D_n+1.
@@ -401,7 +401,7 @@ contains
 
 
        select case ( loes_type )
-       case ( 1 ) ! Transient l�sning
+       case ( 1 ) ! Transient lï¿½sning
           select case ( output_type )
           case(1) ! udskriver deformation yil hvert tilskridt
              call WriteEnsightGeo(filename)
@@ -412,7 +412,7 @@ contains
              call output_vector(kraftvec,'kraftvec')
              call output_vector(output_vec,'DOFdisp')
              call output_data('data',rho,deltaT)
-          case( 4) ! udskriver "energien" i bj�lken
+          case( 4) ! udskriver "energien" i bjï¿½lken
              call output_vector(output_vec,'energy')
              call output_vector(output_kin,'kin_energy')
              call output_vector(output_pot,'pot_energy')
@@ -468,7 +468,7 @@ contains
              call plane42transient_me(xe,thk, ng, me1)
              me = ( rho(e)*dens1+(1.0d0-rho(e))*dens2 ) * me1
              call lumped_mass(lumped_type,me,me_lumped)
-          else ! elementerne er ens, men pga. forskelle i rho skal me beregnes p� ny hver gang
+          else ! elementerne er ens, men pga. forskelle i rho skal me beregnes pï¿½ ny hver gang
              me = ( rho(e)*dens1+(1.0d0-rho(e))*dens2 ) * me1
              call lumped_mass(lumped_type,me,me_lumped)
           end if
@@ -478,7 +478,7 @@ contains
 
        do i = 1, nb
           idof = 2*(bound(i,1)-1) + bound(i,2)
-          M(idof) = 1 ! Her skal diagonalelementer ved RB s�ttes lig 1
+          M(idof) = 1 ! Her skal diagonalelementer ved RB sï¿½ttes lig 1
        end do
 
      end subroutine buildmass
@@ -638,7 +638,7 @@ contains
                 outvector(edof) = outvector(edof)+me_lumped*invector(edof)
              case(4)!product of damping and invec
 
-                !$$$$$$     ! Fors�g p� at g�re routinen hurtigere. Men indtil videre afh�nger CZe af rho, s� det er ikke lykkedes.
+                !$$$$$$     ! Forsï¿½g pï¿½ at gï¿½re routinen hurtigere. Men indtil videre afhï¿½nger CZe af rho, sï¿½ det er ikke lykkedes.
                 !$$$$$$     do i = 1, SIZE(element_rand,1) ! Arbsorbing BC's
                 !$$$$$$         if (e == element_rand(i,1) ) then
                 !$$$$$$         select case(element_rand(i,2))!face
@@ -705,7 +705,7 @@ contains
           end do
           do i = 1, nb ! Y corrected for BC
              idof = 2*(bound(i,1)-1) + bound(i,2)
-             outvector(idof) = 0!bound(i, 3) ! Her skal diagonalelementer ved RB s�ttes lig 0
+             outvector(idof) = 0!bound(i, 3) ! Her skal diagonalelementer ved RB sï¿½ttes lig 0
           end do
        end select
 
@@ -750,7 +750,7 @@ contains
 
        select case(mtype)
 
-       case(1) ! er b�lgeretningen normal p� fladen? ja
+       case(1) ! er bï¿½lgeretningen normal pï¿½ fladen? ja
           do i = 1, SIZE(element_rand,1) ! Arbsorbing BC's
              e = element_rand(i,1)
 
@@ -787,15 +787,15 @@ contains
                 nvec(2) = 0.0d0
              end select
 
-             length = 0.50d0*dsqrt(p1**2+p2**2)! length er randens halve l�ngde.
+             length = 0.50d0*dsqrt(p1**2+p2**2)! length er randens halve lï¿½ngde.
              eface = element_rand(i,2)
 
-             ! er b�lgeretningen normal p� fladen? ja
+             ! er bï¿½lgeretningen normal pï¿½ fladen? ja
              call plane42transient_CZe(xe,eface, young1,young2,dens1,dens2, nu1, nu2, thk, length,ng,rho(e), CZe)
              outvector(edof) = outvector(edof)+MATMUL(CZe,invector(edof)) 
           end do
 
-       case (0)! er b�lgeretningen normal p� fladen? Nej
+       case (0)! er bï¿½lgeretningen normal pï¿½ fladen? Nej
           do i = 1, SIZE(element_rand,1) ! Arbsorbing BC's
              e = element_rand(i,1)
 
@@ -832,10 +832,10 @@ contains
                 nvec(2) = 0.0d0
              end select
 
-             length = 0.50d0*dsqrt(p1**2+p2**2)! length er randens halve l�ngde.
+             length = 0.50d0*dsqrt(p1**2+p2**2)! length er randens halve lï¿½ngde.
              eface = element_rand(i,2)
 
-             ! er b�lgeretningen normal p� fladen? Nej
+             ! er bï¿½lgeretningen normal pï¿½ fladen? Nej
              r = abs_rand(i)%r
              r1 = abs_rand(i)%r_enhed(1)
              r2 = abs_rand(i)%r_enhed(2)
@@ -854,7 +854,7 @@ contains
              parameters(12) = nvec(1)
              parameters(13) = nvec(2)
 
-             ! Nedenst�ende er for at teste den numeriske integration i forhold til de eksakte indtastede matricer i plane42transient_CZe
+             ! Nedenstï¿½ende er for at teste den numeriske integration i forhold til de eksakte indtastede matricer i plane42transient_CZe
              !$$$$$$         r = 0.0d0
              !$$$$$$         parameters(1) = young1
              !$$$$$$         parameters(2) = young2
@@ -871,7 +871,7 @@ contains
              !$$$$$$         parameters(13) = nvec(2)
 
 
-             ! D�mpningsbidraget ligges til outvector.
+             ! Dï¿½mpningsbidraget ligges til outvector.
              ! Stivhedsbidraget ligges til den globale stivhedsmatrix.
              call plane42transient_CZe_punkt(xe,parameters,eface,ng,rho(e), CZe)
              outvector(edof) = outvector(edof)+MATMUL(CZe,invector(edof))
@@ -887,7 +887,7 @@ contains
 
        do i = 1, nb ! Y corrected for BC
           idof = 2*(bound(i,1)-1) + bound(i,2)
-          outvector(idof) = 0!bound(i, 3) ! Her skal diagonalelementer ved RB s�ttes lig 0
+          outvector(idof) = 0!bound(i, 3) ! Her skal diagonalelementer ved RB sï¿½ttes lig 0
           if (present(outvector2)) then
              outvector2 = 0.0d0
           end if
@@ -948,7 +948,7 @@ contains
                    nvec(2) = 0.0d0
                 end select
 
-                length = 0.50d0*dsqrt(p1**2+p2**2)! length er randens halve l�ngde.
+                length = 0.50d0*dsqrt(p1**2+p2**2)! length er randens halve lï¿½ngde.
                 eface = element_rand(i,2)
 
                 r = abs_rand(i)%r
@@ -974,7 +974,7 @@ contains
 
                 do ii = 1, 2*nen
                    do j =1, 2*nen
-                      if (edof(ii)>=edof(j)) then ! brug kun elementer der st�r under eller p� diagonalen i global K+
+                      if (edof(ii)>=edof(j)) then ! brug kun elementer der stï¿½r under eller pï¿½ diagonalen i global K+
                          k((edof(ii)-edof(j)+1),edof(j)) = k((edof(ii)-edof(j)+1),edof(j)) + KRe(ii,j)
                       end if
                    end do
@@ -1019,7 +1019,7 @@ contains
 
        length_first_element= x(element(1)%ix(2),1)-x(element(1)%ix(1),1)
        hight_first_element= x(element(1)%ix(4),2)-x(element(1)%ix(1),2)
-       number_elements_x = NINT(lx/length_first_element) ! Antal elemnter i x-retningen ! runder op til n�rmeste integer. Hvis nint ikke medtages, rundes der forkert af
+       number_elements_x = NINT(lx/length_first_element) ! Antal elemnter i x-retningen ! runder op til nï¿½rmeste integer. Hvis nint ikke medtages, rundes der forkert af
        number_nodes_x = number_elements_x+1 ! Alternativt nn/number_nodes_y
        number_elements_y = NINT(ly/hight_first_element) ! Antal elemnter i y-retningen
        number_nodes_y = number_elements_y+1 !Antal knuder i y-retningen
@@ -1029,22 +1029,22 @@ contains
        allocate( center_dofs_x(number_nodes_x), dof_x_end(number_nodes_y) )
        allocate(element_top(number_elements_x),element_bottom(number_elements_x))
 
-       ! Elements i venstre og h�jre side
+       ! Elements i venstre og hï¿½jre side
        do i=1,number_elements_y
           element_beginning(i) = i
           element_end(i) = (ne-number_elements_y+i)
           !print*,'elemet_end',element_end(i)
        end do
 
-       ! elements top and bottom. Bem�rk at hj�rneelementer g�r igen, da b�de venstre/h�jre og �vre/nedre rand skal med
+       ! elements top and bottom. Bemï¿½rk at hjï¿½rneelementer gï¿½r igen, da bï¿½de venstre/hï¿½jre og ï¿½vre/nedre rand skal med
        do i=1,number_elements_x
           element_top(i) = i*number_elements_y
           element_bottom(i) = 1+(i-1)*number_elements_y
        end do
 
-       !$$$$$$     rand = 2 ! hvilke sider skal d�mpes.
+       !$$$$$$     rand = 2 ! hvilke sider skal dï¿½mpes.
        select case(rand)
-       case(4) ! alle fire sider skal d�mpes
+       case(4) ! alle fire sider skal dï¿½mpes
           allocate(element_rand(2*number_elements_y+2*(number_elements_x) , 2))
           element_rand = 0
           index1 = 1
@@ -1067,7 +1067,7 @@ contains
           element_rand(index1:index2,1) = element_top
           element_rand(index1:index2,2) = 3
 
-       case(1) ! kun h�jre side skal d�mpes
+       case(1) ! kun hï¿½jre side skal dï¿½mpes
           allocate(element_rand(number_elements_y, 2))
           element_rand = 0
           index1 = 1
@@ -1075,7 +1075,7 @@ contains
           element_rand(index1:index2,1) = element_end
           element_rand(index1:index2,2) = 2
 
-       case(2) ! Venstre og h�jre side skal d�mpes
+       case(2) ! Venstre og hï¿½jre side skal dï¿½mpes
           allocate(element_rand(2*number_elements_y, 2))
           element_rand = 0
           index1 = 1
@@ -1089,27 +1089,27 @@ contains
           element_rand(index1:index2,2) = 2
        end select
 
-       !call output_matrix(real(element_rand),'element_rand') ! Hvis element_rand ikke kan udskrives pga integer: �ndre element_rand til real(8) i fedata
+       !call output_matrix(real(element_rand),'element_rand') ! Hvis element_rand ikke kan udskrives pga integer: ï¿½ndre element_rand til real(8) i fedata
        
-       ! unders�g om frihedsgrader i hj�rneknuder indg�r i L s� de t�ller med i objektfunktionen
+       ! undersï¿½g om frihedsgrader i hjï¿½rneknuder indgï¿½r i L sï¿½ de tï¿½ller med i objektfunktionen
        ny = number_nodes_y
        nx = number_nodes_x
        if (present(file)) then
           select case(file) ! 2:3 angiver disk
           case(2:3)
-             if (L(1) == 0) then! nederste venstre hj�rne
+             if (L(1) == 0) then! nederste venstre hjï¿½rne
         	L(1) = 1d0; end if
              if (L(2) == 0) then
                 L(2) = 1d0; end if
-             if (L(2*ny-1) == 0) then! �verste venstre hj�rne
+             if (L(2*ny-1) == 0) then! ï¿½verste venstre hjï¿½rne
                 L(2*ny-1) = 1d0; end if
              if (L(2*ny) == 0) then
                 L(2*ny) = 1d0; end if
-             if (L(2*ny*(nx-1)+1) == 0) then! nederste h�jre hj�rne
+             if (L(2*ny*(nx-1)+1) == 0) then! nederste hï¿½jre hjï¿½rne
                 L(2*ny*(nx-1)+1) = 1d0; end if
              if (L(2*ny*(nx-1)+2) == 0) then
                 L(2*ny*(nx-1)+2) = 1d0; end if
-             if (L(2*ny*nx-1) == 0) then! �verste h�jre hj�rne
+             if (L(2*ny*nx-1) == 0) then! ï¿½verste hï¿½jre hjï¿½rne
                 L(2*ny*nx-1) = 1d0; end if
              if (L(2*ny*nx) == 0) then
                 L(2*ny*nx) = 1d0
@@ -1118,20 +1118,20 @@ contains
        end if
        
        
-       if (MOD(number_nodes_x,2) == 0) then ! lige antal knuder i x-retning(dvs. der er ikke en knude pr�cis i x_retning midten)
+       if (MOD(number_nodes_x,2) == 0) then ! lige antal knuder i x-retning(dvs. der er ikke en knude prï¿½cis i x_retning midten)
           center_node = NINT(number_nodes_x/2.0)*number_nodes_y + NINT(number_nodes_y/2.0) ! runder op
-       else ! der er en knude pr�cis i midten
+       else ! der er en knude prï¿½cis i midten
           center_node = NINT(number_nodes_x/2.0)*number_nodes_y - NINT(number_nodes_y/2.0)+1
        end if
        midter_dof_x = center_node*2-1
        midter_dof_y = center_node*2
        print*,'Midter_dof_x', Midter_dof_x  
 
-       if (MOD(number_nodes_y,2) == 0) then ! lige antal knuder i y-retning(dvs. der er ikke en knude pr�cis i midten)
+       if (MOD(number_nodes_y,2) == 0) then ! lige antal knuder i y-retning(dvs. der er ikke en knude prï¿½cis i midten)
           center_node_y = NINT(number_nodes_y/2.0)
-       else ! der er en knude pr�cis i midten
+       else ! der er en knude prï¿½cis i midten
           center_node_y = NINT(number_nodes_y/2.0)
-          print*,'der er en knude pr�cis i midten i h�jde-retning(y)'
+          print*,'der er en knude prï¿½cis i midten i hï¿½jde-retning(y)'
        end if
 
        do i=1,(number_nodes_x )
@@ -1140,8 +1140,8 @@ contains
           !$$$$$$          print*,'center_nodes', center_nodes_x(i)
        end do
 
-       ! DOF_x for enden af elementet. Det foruds�tter at element_end(1) er det f�rste element af endeelementerne, samt at
-       ! endeelementerne er sammenh�ngende, s� nummereringen er kontinuert. Ved en normal bj�lkestruktur er det opfyldt.
+       ! DOF_x for enden af elementet. Det forudsï¿½tter at element_end(1) er det fï¿½rste element af endeelementerne, samt at
+       ! endeelementerne er sammenhï¿½ngende, sï¿½ nummereringen er kontinuert. Ved en normal bjï¿½lkestruktur er det opfyldt.
        e = element_end(1)
        node = (element(e)%ix(2) )*2 -1
        do i=1,number_nodes_y
@@ -1186,7 +1186,7 @@ contains
      end subroutine deltaT_init
 
      subroutine explosive_source(Dcurr,radius,center,g)
-       ! beregner v�gtnings-vektoren (g(r)) ved en eksplosiv source med radius a og centrum c(x,y).
+       ! beregner vï¿½gtnings-vektoren (g(r)) ved en eksplosiv source med radius a og centrum c(x,y).
 
        use fedata
 
@@ -1207,7 +1207,7 @@ contains
 
           r = dsqrt( (p1-c1)**2 + (p2-c2)**2 )
 
-          if(r<= a) then! punktet ligger p� disken
+          if(r<= a) then! punktet ligger pï¿½ disken
              if (r==0) then
                 cycle
                 !r = r+1E-12
@@ -1235,7 +1235,7 @@ contains
        real(8) :: p1, p2, r,r1,r2, c1, c2, xe(8)
 
        select case(rand)
-       case(0) ! ingen d�mpning
+       case(0) ! ingen dï¿½mpning
           return
        case default
 

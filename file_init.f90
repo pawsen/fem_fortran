@@ -22,7 +22,7 @@ CONTAINS
     real(8) :: cT, dens,young,nu, lambda,mu, deltaT_max, real_parameters(10), output_vec(20),deltaT_faktor
     integer :: nr, read_para, cL_set, int_parameters(10)
 
-    !indlæs	materialedata fra fil
+    !indlÃ¦s	materialedata fra fil
     call parameter_input_transient(real_parameters,int_parameters)
     deltaT = 0.0d0
 
@@ -56,7 +56,7 @@ CONTAINS
           dens1 = real_parameters(7)
           dens2 = real_parameters(8)
        end if
-       write(*,*)'materialedata indlæst fra fil!'
+       write(*,*)'materialedata indlÃ¦st fra fil!'
        write(*,*)
     else ! angiv materialedata her
        write(*,*)'materialedata angivet manuelt i fortran kode!'
@@ -127,14 +127,14 @@ CONTAINS
 
     call deltaT_init(rho,deltaT_max)
     if ((deltaT > deltaT_max) .and. deltaT /= 0 )then
-       print*,'Error, deltaT er for stor. Den må maks være ',deltaT_max
+       print*,'Error, deltaT er for stor. Den mÃ¥ maks vÃ¦re ',deltaT_max
        stop
     end if
 
-    deltaT = deltaT_faktor*deltaT_max ! sætter deltaT til at være 70% af den masimale værdi
+    deltaT = deltaT_faktor*deltaT_max ! sÃ¦tter deltaT til at vÃ¦re 70% af den masimale vÃ¦rdi
 
     ! print materialeoplysninger
-    nr = 10 ! elementnummeret skal ikke være i enden hvor de inaktive elementer sidder. Ellers er det uden betydning da alle elementer er ens
+    nr = 10 ! elementnummeret skal ikke vÃ¦re i enden hvor de inaktive elementer sidder. Ellers er det uden betydning da alle elementer er ens
     dens = rho(nr)*dens1+(1.0-rho(nr))*dens2
     young = rho(nr)*young1+(1.0-rho(nr))*young2
     nu = rho(nr)*nu1+(1.0-rho(nr))*nu2
@@ -192,14 +192,14 @@ CONTAINS
 
   end subroutine inputfile_trans
 
-  !¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤
+  !Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤
 
   subroutine parameter_input_transient(real_parameters,int_parameters)
     use fedata
 
     !  This subroutine reads in the design-variabel (rho). It also tjek that the number of rho in the inputfile
     !  equals ne(number of elements). Notice that the file containing rho, should have a line only saying 
-    !  'rho[' and endline '];'(eg disse skal stå seperat og værdierne for rho står imellem disse tegn.
+    !  'rho[' and endline '];'(eg disse skal stÃ¥ seperat og vÃ¦rdierne for rho stÃ¥r imellem disse tegn.
 
     real(8), dimension(:), intent(OUT) :: real_parameters
     integer, dimension(:), intent(OUT) :: int_parameters
@@ -221,7 +221,7 @@ CONTAINS
     if (.not. fnexist) then 
        write (*, *)
        write (*, '("Error: file(parametre) ", a, " does not exist.")') trim(rho_filename) 
-       !stop ! i stedet for at stoppe programmet tildeles rho værdien 1, hvorfor den ikke får nogen betydning.
+       !stop ! i stedet for at stoppe programmet tildeles rho vÃ¦rdien 1, hvorfor den ikke fÃ¥r nogen betydning.
        write (*, '("parametre er sat som i file-init")')
        write (*, *)
        read_para = 0
@@ -232,7 +232,7 @@ CONTAINS
     do
        read (10, *) command
        if (command == 'FINISH' .or. command == 'finish') then
-          exit ! quit do løkke
+          exit ! quit do lÃ¸kke
        elseif (command == 'cL') then
           backspace (10)
           read (10, *) command, rvalue
@@ -328,7 +328,7 @@ CONTAINS
     real_parameters(8) = dens2_r
     real_parameters(9) = deltaT_faktor
 
-    close (10) ! lukker filen, så der læses fra toppen næste gang den åbnes
+    close (10) ! lukker filen, sÃ¥ der lÃ¦ses fra toppen nÃ¦ste gang den Ã¥bnes
 
 
   end subroutine parameter_input_transient
@@ -347,12 +347,12 @@ CONTAINS
     real(8) :: real_parameters(10)
     integer :: int_parameters(15), read_para
 
-    !indlæs	materialedata fra fil
+    !indlÃ¦s	materialedata fra fil
     call parameter_input(real_parameters,int_parameters)
 
     read_para = int_parameters(9)
     select case(read_para)
-    case(1)! parametre indlæses fra fil
+    case(1)! parametre indlÃ¦ses fra fil
        !file = int_parameters(1)
        filter_type = int_parameters(1)
        solver_type = int_parameters(2)
@@ -401,7 +401,7 @@ CONTAINS
           damp_fact   = 0.4d0	! Parameter to make solution stable. (eta = 0.65)
        end select
        select case( vol_type )
-       case( 2 ) ! så er vol_frac specificeret
+       case( 2 ) ! sÃ¥ er vol_frac specificeret
           !	max_vol = vol_frac
        end select
        n_iter = 1000
@@ -433,7 +433,7 @@ CONTAINS
 
     !  This subroutine reads in the design-variabel (rho). It also tjek that the number of rho in the inputfile
     !  equals ne(number of elements). Notice that the file containing rho, should have a line only saying 
-    !  'rho[' and endline '];'(eg disse skal stå seperat og værdierne for rho står imellem disse tegn.
+    !  'rho[' and endline '];'(eg disse skal stÃ¥ seperat og vÃ¦rdierne for rho stÃ¥r imellem disse tegn.
 
     real(8), dimension(:), intent(OUT) :: real_parameters
     integer, dimension(:), intent(OUT) :: int_parameters
@@ -459,7 +459,7 @@ CONTAINS
     if (.not. fnexist) then 
        write (*, *)
        write (*, '("Error: file(parametre) ", a, " does not exist.")') trim(rho_filename) 
-       !stop ! i stedet for at stoppe programmet tildeles rho værdien 1, hvorfor den ikke får nogen betydning.
+       !stop ! i stedet for at stoppe programmet tildeles rho vÃ¦rdien 1, hvorfor den ikke fÃ¥r nogen betydning.
        write (*, '("parametre er sat som i file-init")')
        write (*, *)
        read_para = 0
@@ -470,7 +470,7 @@ CONTAINS
     do
        read (10, *) command
        if (command == 'FINISH' .or. command == 'finish') then
-          exit ! quit do løkke
+          exit ! quit do lÃ¸kke
           ! real(8) - dvs data mv.
        elseif (command == 'penal') then
           backspace (10)
@@ -551,7 +551,7 @@ CONTAINS
           if (present(rand_int)) then
              read (10, *) command, ivalue, ivalue2, ivalue3, ivalue4
              rand_int = [ivalue, ivalue2, ivalue3, ivalue4]
-          else ! skal være her, ellers bliver det en uendelig løkke
+          else ! skal vÃ¦re her, ellers bliver det en uendelig lÃ¸kke
              read (10, *) command
           end if
        elseif (command == 'rand_val') then
@@ -565,7 +565,7 @@ CONTAINS
        endif
     end do
 
-    close (10) ! lukker filen, så der læses fra toppen næste gang den åbnes
+    close (10) ! lukker filen, sÃ¥ der lÃ¦ses fra toppen nÃ¦ste gang den Ã¥bnes
 
     int_parameters(1) = filter_type
     int_parameters(2) = solver_type

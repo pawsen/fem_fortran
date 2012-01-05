@@ -267,7 +267,7 @@ SUBROUTINE plane42transient_CZe(xe,eface, young1,young2,dens1,dens2, nu1, nu2, t
   cT = dsqrt( mu / dens)
 
   
-! F�lgende er kun for b�lgeretning vinkelret p� fladen
+! Fï¿½lgende er kun for bï¿½lgeretning vinkelret pï¿½ fladen
 !
 	numerisk = 0
   
@@ -275,8 +275,8 @@ SUBROUTINE plane42transient_CZe(xe,eface, young1,young2,dens1,dens2, nu1, nu2, t
  select case (numerisk)
  case(1)
 
-  ! rr1 er b�lgens(og dermed flades) 1. komponemt ganget sammen
-  ! rr2 er b�lgens(og dermed flades) 2. komponemt ganget sammen
+  ! rr1 er bï¿½lgens(og dermed flades) 1. komponemt ganget sammen
+  ! rr2 er bï¿½lgens(og dermed flades) 2. komponemt ganget sammen
   select case(eface)
   case(1)
   	rr1 = 0.0d0

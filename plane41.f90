@@ -130,7 +130,7 @@ CONTAINS
        j = 1
     end if
 
-    ! he_t fås ved eksakt integration, se s. 461 i COOK, af het = \int_{-1}^{1} N^T N h ,dS
+    ! he_t fÃ¥s ved eksakt integration, se s. 461 i COOK, af het = \int_{-1}^{1} N^T N h ,dS
 
     he_t = 0.0d0
     hmat = 0.0d0
@@ -168,7 +168,7 @@ CONTAINS
        j = 1
     end if
 
-    ! rbe_t fås ved eksakt integration, se s. 462 i COOK, af rbe_t = \int_{-1}^{1} N^T fb ,dS
+    ! rbe_t fÃ¥s ved eksakt integration, se s. 462 i COOK, af rbe_t = \int_{-1}^{1} N^T fb ,dS
 
     rbe_t = 0.0d0
     rbevec = 0.0d0
@@ -295,14 +295,14 @@ CONTAINS
     Nvec(3) = (1+xi)*(1+eta)/4.0d0
     Nvec(4) = (1-xi)*(1+eta)/4.0d0
 
-    ! Bemærk at ved 1 DOF pr knude er er Ntilde[2x4] i modsætning til Ntilde[4x8] ved 2 DOF pr knude., se evt. s. 57 i uge 8 noter
+    ! BemÃ¦rk at ved 1 DOF pr knude er er Ntilde[2x4] i modsÃ¦tning til Ntilde[4x8] ved 2 DOF pr knude., se evt. s. 57 i uge 8 noter
     Ntilde = 0.0d0
     do i = 1, 4
        Ntilde(1,i) = N_xi(i)
        Ntilde(2,i) = N_eta(i)
     end do
 
-    !$$$$$$   Nmat=0.0d0 ! Skal ikke bruges, så derfor er den udkommenteret
+    !$$$$$$   Nmat=0.0d0 ! Skal ikke bruges, sÃ¥ derfor er den udkommenteret
     !$$$$$$   do i = 1, 4
     !$$$$$$     Nmat(1,2*i-1) = Nvec(i)
     !$$$$$$     Nmat(2,2*i)   = Nvec(i)
@@ -325,7 +325,7 @@ CONTAINS
     GAMMA(2,1) = -jac(2,1)
     GAMMA = GAMMA*(1.0d0/detjac)
 
-    ! Bemærk at Bmat er defineret anderledes her, end for plane42, se s. 462 (12.2-7) og s 208 (6.2-13)
+    ! BemÃ¦rk at Bmat er defineret anderledes her, end for plane42, se s. 462 (12.2-7) og s 208 (6.2-13)
     Bmat = MATMUL(GAMMA, Ntilde)
 
   END SUBROUTINE plane41_shape

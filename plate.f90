@@ -18,18 +18,18 @@ contains
     use file_init
     
     !integer, intent(in) :: plate_type
-    integer :: e, nen, bw_e, nzz
+    integer :: e, nen, bw_e, nzz, nb_rb, i
     integer:: rand_int(4), int_dummy(11)
     real(8) ::  rand_val(4), real_dummy(7)
 
     integer, parameter :: mdim = 12
-    integer:: plate_type = 2
+    integer, parameter :: plate_type = 2
 
     ! add rb along one of the sides
 
     call parameter_input(real_dummy,int_dummy,rand_int,rand_val)
     call rb_init_plate(rand_int,rand_val)
-    !call load_init_plate ! inspÊnder plade langs randen og giver jÊvnt fordelt last pÂ fladen
+    !call load_init_plate ! insp√¶nder plade langs randen og giver j√¶vnt fordelt last p√• fladen
     
     
     ! This subroutine computes the number of global equation,
@@ -57,12 +57,23 @@ contains
     if(banded == 2) then ! sparse
        !12*12*ne is the number of times the local stiffness matrix adds a value to the global(including dublicates, eg. is't not nz(number of non-zeros)). Because of lagrangien multiplier there is added xtra two non-zero entries for each RB
 
+
+       !ALloker kun plads til forskydnings RB. Dvs intet potentiale, hvilket kan ske hvis der k√∏res EIGEN p√• en piezo-struktur
+       nb_rb = 0
+       do i=1,nb
+          if (bound(i,2) < 6) then! forskydning
+             nb_rb  = nb_rb+1
+          end if
+       end do
+
        if ( (eigenvalue%calc .and.  (eigenvalue%shift .eqv. .false.)) ) then
           nzz = 12*12*ne
+          nnz_ub = nzz
           neqn_nb = neqn
        else
-          nzz = 12*12*ne+2*nb
-          neqn_nb = neqn+nb
+          nnz_ub = 12*12*ne
+          nzz = 12*12*ne+2*nb_rb
+          neqn_nb = neqn+nb_rb
        end if
 
        allocate(iK(nzz),jK(nzz),sK(nzz))
@@ -184,7 +195,7 @@ contains
 
           call get_edof(e,nen,xe,edof=edof)
 
-          ! NB der er forskel pÂ hvordan lastvektoren laves, alt efter om det er mindlin eller kirchoff. Derfor virker nedenstÂende kun for mindlin!
+          ! NB der er forskel p√• hvordan lastvektoren laves, alt efter om det er mindlin eller kirchoff. Derfor virker nedenst√•ende kun for mindlin!
           call mindlin42_re(xe,eface,fe,thk,re)
 
           p(edof) = p(edof) + re    
@@ -206,7 +217,7 @@ contains
     use fedata
     use plate41rect
     use mindlin42
-    use fea, only : assemble_sparse
+    use fea, only : assemble_sparse, sparse_add_lagrangian
     use numeth, only : get_edof
 
     !integer, intent(IN):: plate_type
@@ -222,6 +233,7 @@ contains
     real(8) :: young, nu, dens, thk, shear
     integer, parameter :: plate_type = 2
 
+
     ! Reset stiffness matrix
     if ( banded == 0) then
        k(1:neqn, 1:neqn) = 0.
@@ -231,6 +243,7 @@ contains
 
     ii = 0! sparse
     jj = 0
+
     
     do e = 1, ne
 
@@ -275,22 +288,7 @@ contains
 
     !add values from lagrangian multipliers
     if ( banded == 2 .and. ((antype /= 'EIGEN') .or. eigenvalue%shift)) then
-       do i=1,nb
-          ! UPS: bound(i,3) is used both for temp and moments for
-          !  plates. Stupid!
-          idof = 3*(bound(i,1)-1) + bound(i,2)
-          ! nederste matrix
-          ii = ii+1
-          iK(ii) = neqn+i
-          jK(ii) = idof
-          sK(ii ) = 1d0
-          ! matrix to the right
-          ii = ii+1
-          iK(ii) = idof
-          jK(ii) = neqn+i
-          sK(ii ) = 1d0
-       end do
-
+       call sparse_add_lagrangian(kk,ii)
     end if
 
   end subroutine buildstiff_plate
@@ -442,12 +440,12 @@ contains
           stress(e, :) = estress
           strain(e, :) = estrain
 
-          vonMises(e) = (estress(1)**2+estress(2)**2-estress(1)*estress(2)+3.0*estress(3)**2)**(0.50d0) !von mises spÊnding
-          p1(e) = (estress(1)+estress(2))*0.50d0+dsqrt(((estress(1)-estress(2))*0.50d0)**2+estress(3)**2) !hovedspÊnding 1
-          p2(e) = (estress(1)+estress(2))*0.50d0-dsqrt(((estress(1)-estress(2))*0.50d0)**2+estress(3)**2) !hovedspÊnding 2
-          c_angle = (estress(1)-estress(2))/(p1(e)-p2(e)) ! cosins til vinlen for hovedspÊnding 1
-          s_angle = (-2.0d0*estress(3))/(p1(e)-p2(e))! sinus til vinlen for hovedspÊnding 2
-          angle(e) = datan2(s_angle,c_angle)/2.0d0! vinklen for hovedspÊnding 1. positiv i retning mod uret. [rad]
+          vonMises(e) = (estress(1)**2+estress(2)**2-estress(1)*estress(2)+3.0*estress(3)**2)**(0.50d0) !von mises sp√¶nding
+          p1(e) = (estress(1)+estress(2))*0.50d0+dsqrt(((estress(1)-estress(2))*0.50d0)**2+estress(3)**2) !hovedsp√¶nding 1
+          p2(e) = (estress(1)+estress(2))*0.50d0-dsqrt(((estress(1)-estress(2))*0.50d0)**2+estress(3)**2) !hovedsp√¶nding 2
+          c_angle = (estress(1)-estress(2))/(p1(e)-p2(e)) ! cosins til vinlen for hovedsp√¶nding 1
+          s_angle = (-2.0d0*estress(3))/(p1(e)-p2(e))! sinus til vinlen for hovedsp√¶nding 2
+          angle(e) = datan2(s_angle,c_angle)/2.0d0! vinklen for hovedsp√¶nding 1. positiv i retning mod uret. [rad]
 
        end do
 
@@ -459,7 +457,7 @@ contains
     use fedata
     use plot_routiner
 
-    integer, intent(IN) :: rand_int(:) ! mÂ ikke hedde rand, da rand er initialiseret i fedata, DOH!!!
+    integer, intent(IN) :: rand_int(:) ! m√• ikke hedde rand, da rand er initialiseret i fedata, DOH!!!
     real(8), intent(IN) :: rand_val(:)
     integer :: i, e, nen, np_temp
     integer :: ny,nx
@@ -491,7 +489,7 @@ contains
     allocate (loads(np_temp,5))
     loads(1:np,:) = loads_temp
 
-    ! NB hj¯rne-knuder vil indgÂ to gange hvis, hvis to tilst¯dende rande pÂskrives.
+    ! NB hj√∏rne-knuder vil indg√• to gange hvis, hvis to tilst√∏dende rande p√•skrives.
     ! DET ER ET PROBLEM!!!
     do e=1,size(rand_int) ! set RB for force
        select case(rand_int(e))
@@ -555,8 +553,8 @@ contains
   end subroutine rb_init_plate
 
   subroutine load_init_plate
-    ! tilf¯jer fordelt latteral last pÂ alle knuder
-    ! og simpelt underst¯ttet langs randen
+    ! tilf√∏jer fordelt latteral last p√• alle knuder
+    ! og simpelt underst√∏ttet langs randen
 
     use fedata
     use numeth
@@ -621,7 +619,7 @@ contains
        end select
     end do
 
-    !NB hj¯rne-knuder indgÂr to gange, hvor to tilst¯dende rande m¯des.
+    !NB hj√∏rne-knuder indg√•r to gange, hvor to tilst√∏dende rande m√∏des.
     ! De fjernes
     allocate(index_nb(nb))
     call index_dups(INT(bound_buf(:,1:2)),index_nb,i)
@@ -663,7 +661,7 @@ contains
     
     length_first_element= x(element(1)%ix(2),1)-x(element(1)%ix(1),1)
     hight_first_element= x(element(1)%ix(4),2)-x(element(1)%ix(1),2)
-    number_elements_x = NINT(lx/length_first_element) ! Antal elemnter i x-retningen ! runder op til nÊrmeste integer. Hvis nint ikke medtages, rundes der forkert af
+    number_elements_x = NINT(lx/length_first_element) ! Antal elemnter i x-retningen ! runder op til n√¶rmeste integer. Hvis nint ikke medtages, rundes der forkert af
     number_nodes_x = number_elements_x+1 ! Alternativt nn/number_nodes_y
     number_elements_y = NINT(ly/hight_first_element) ! Antal elemnter i y-retningen
     number_nodes_y = number_elements_y+1 !Antal knuder i y-retningen

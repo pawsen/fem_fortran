@@ -47,7 +47,7 @@ CONTAINS
     character*(MXSTLN):: coord_names(3)
     character*(MXSTLN):: cname
     character*(MXSTLN):: var_names(4)
-    character(len = 40):: filename_exodus !denne må åbenbart godt være længere end MXSTLN
+    character(len = 40):: filename_exodus !denne mÃ¥ Ã¥benbart godt vÃ¦re lÃ¦ngere end MXSTLN
 
     integer :: ierr, e
     integer :: kk, i, j,  m
@@ -180,15 +180,15 @@ CONTAINS
 
     if ( harmonic) then
 
-       ! bestem frekvens og lav lineær intepolation for tiden i een periode.
+       ! bestem frekvens og lav lineÃ¦r intepolation for tiden i een periode.
        frekvens = mat_vec(20)
        if (int(frekvens) == 0) then
           omega = 0d0
           period = 0d0
           num_time_steps = 2
           print*
-          print*,'Frekvensen er 0, så jeg håber DU har sat potentialet på som cos.'
-          print*,'Hvis ikke, er både forskydninger og potential nul i .exo filen'
+          print*,'Frekvensen er 0, sÃ¥ jeg hÃ¥ber DU har sat potentialet pÃ¥ som cos.'
+          print*,'Hvis ikke, er bÃ¥de forskydninger og potential nul i .exo filen'
           print*
        else
           omega = 2*pi* frekvens
@@ -200,7 +200,7 @@ CONTAINS
 
        
        do i = 1, num_time_steps
-          time = lower+(real(i)-1.0)*(upper-lower)/(real(num_time_steps)-1.0)! lineær intepolation
+          time = lower+(real(i)-1.0)*(upper-lower)/(real(num_time_steps)-1.0)! lineÃ¦r intepolation
 
           ! write time value
           call exptim (exoid, i, time, ierr)!s152
@@ -324,7 +324,7 @@ CONTAINS
     character*(MXSTLN):: coord_names(3)
     character*(MXSTLN):: cname
     character*(MXSTLN):: var_names(4), elem_var_names(4)
-    character(len = 40):: filename_exodus !denne må åbenbart godt være længere end MXSTLN
+    character(len = 40):: filename_exodus !denne mÃ¥ Ã¥benbart godt vÃ¦re lÃ¦ngere end MXSTLN
 
 
     integer :: e
@@ -466,12 +466,14 @@ CONTAINS
   end subroutine exodus_init
 
   subroutine exodus_write_time(i,time)
+    !write time as the last thing before next timestep
+    !This is due to the flus-buffer command
     
-    real, intent(in) :: time
+    real(8), intent(in) :: time
     integer, intent(in) :: i ! step number
 
     ! write time value
-    call exptim (exoid, i, time, ierr)!s152
+    call exptim (exoid, i, real(time,4), ierr)!s152
     ! updata exodus-file. This also flush netCDF I/O buffer., s.3 as3
     call exupda (exoid, ierr)
 

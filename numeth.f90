@@ -7,8 +7,10 @@ module numeth
 
    private
    public :: factor, solve, bfactor, bsolve, vector_mul, gauss_points
-   public :: index_dups, rotation_matrix, sparse_multiply, inv_matrix
-   public :: correct_bound_vector, get_edof, lapack_eigenval
+   public :: index_dups, rotation_matrix, sparse_multiply
+   public :: correct_bound_vector, get_edof
+   PUBLIC :: lapack_eigenval, lapack_solve_general, lapack_inverse_matrix
+   public :: blas_matmul
 
    public :: make_dir
 
@@ -123,7 +125,7 @@ subroutine bsolve(a, b)
 end subroutine bsolve
 
 subroutine vector_mul(A,B,C)
-  ! ganger to vektorer med hinanden, således resultatet bilver en matrix
+  ! ganger to vektorer med hinanden, sÃ¥ledes resultatet bilver en matrix
 
   real(8),dimension(:), intent(IN) :: A, B
   real(8),dimension(:,:), intent(OUT) :: C
@@ -258,7 +260,7 @@ END SUBROUTINE gauss_points
     logical :: exist
 
     !CALL get_environment_variable('DELIMITER',delimiter) ! find ud af om '/' eller '\' skal bruges ved mapper
-    ! kræver at variablen DELIMITER eksistere. Fx på linux: export DELIMITER='/'
+    ! krÃ¦ver at variablen DELIMITER eksistere. Fx pÃ¥ linux: export DELIMITER='/'
     !find out if folder exist by checking for . in the folder. Works on windows/unix/mac
     !http://www.rhinocerus.net/forum/lang-fortran/354299-how-determine-whether-not-there-exists-directory.html
 
@@ -293,9 +295,11 @@ END SUBROUTINE gauss_points
        b(i) = b(i) + val(ii)*xx(col(ii))
     end do
 
-    ! Arggh ikke pænt. HVAD laver nedenstående i min fine matrix-rutine. ARGHHH!
-    if (present(correct_bound) .and. correct_bound .eqv. .true.) then
-       call correct_bound_vector(b)
+    ! Arggh ikke pÃ¦nt. HVAD laver nedenstÃ¥ende i min fine matrix-rutine. ARGHHH!
+    if (present(correct_bound)) then
+       if ( correct_bound .eqv. .true.) then
+          call correct_bound_vector(b)
+       end if
     end if
 
 !!$    !! test structure
@@ -347,7 +351,7 @@ END SUBROUTINE gauss_points
   end subroutine correct_bound_vector
 
 
-  Function Inv_matrix(a) result(ainv) 
+  Function lapack_inverse_matrix(a) result(ainv) 
     implicit none
 
     ! Bruger LAPACK
@@ -402,7 +406,7 @@ END SUBROUTINE gauss_points
           print*,'singular, and division by zero will occur if it is used'
           print*,'to solve a system of equations., i: ', info
           print*
-          print*,'På dansk: Inputmatricen er singulær, numeth.f90!'
+          print*,'PÃ¥ dansk: Inputmatricen er singulÃ¦r, numeth.f90!'
           error stop
        else
           Ainv=0 
@@ -414,7 +418,7 @@ END SUBROUTINE gauss_points
        EndIf
        DeAllocate (IPIV) 
     EndIf
-  End Function Inv_matrix
+  End Function lapack_inverse_matrix
 
 
   subroutine get_edof(e,nen,xe,edof41,edof)
@@ -557,12 +561,12 @@ END SUBROUTINE gauss_points
     REAL(8), intent(in) ::A(:,:)
     INTEGER:: i,j,ii
 
-    ii = size(A,2)
+    ii = size(A,1)
 
     WRITE(*,*)
     WRITE(*,*) title
     DO I = 1, ii
-       print*,(A(i,j),j=1,size(A,1))
+       print*,(A(i,j),j=1,size(A,2))
        !WRITE(*,9998) ( A( I, J ), J = 1, size(A,1) )
     END DO
 
@@ -576,6 +580,224 @@ END SUBROUTINE gauss_points
     ! end do
 
   END SUBROUTINE DISPLAY_MATRIX
+
+  subroutine lapack_solve_general(A,B)
+
+    !solves Ax = b
+    ! Can solve for multiple rhs. Change nrhs
+
+    real(8), intent(in) :: A(:,:)
+    real(8), intent(inout) :: B(:)
+
+    integer :: n, i, j, info
+    integer :: lda, ldb
+    integer, allocatable :: ipiv(:)
+    integer, parameter :: nrhs = 1
+
+    external :: dgesv
+
+    n = size(A,1)
+    lda = n
+    ldb = n
+    allocate(ipiv(n))
+    
+    CALL DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+
+
+    ! Check for the exact singularity.
+    IF( INFO.GT.0 ) THEN
+       WRITE(*,*)'The diagonal element of the triangular factor of A,'
+       WRITE(*,*)'U(',INFO,',',INFO,') is zero, so that'
+       WRITE(*,*)'A is singular; the solution could not be computed.'
+       error STOP
+    elseif (info < 0) then
+       write(*,*)'Fejl i lapack_solve_general'
+       write(*,*)'the i-th argument had an illegal value'
+       error stop
+    END IF
+
+    !  Purpose
+    !  =======
+    !
+    !  DGESV computes the solution to a real system of linear equations
+    !     A * X = B,
+    !  where A is an N-by-N matrix and X and B are N-by-NRHS matrices.
+    !
+    !  The LU decomposition with partial pivoting and row interchanges is
+    !  used to factor A as
+    !     A = P * L * U,
+    !  where P is a permutation matrix, L is unit lower triangular, and U is
+    !  upper triangular.  The factored form of A is then used to solve the
+    !  system of equations A * X = B.
+    !
+    !  Arguments
+    !  =========
+    !
+    !  N       (input) INTEGER
+    !          The number of linear equations, i.e., the order of the
+    !          matrix A.  N >= 0.
+    !
+    !  NRHS    (input) INTEGER
+    !          The number of right hand sides, i.e., the number of columns
+    !          of the matrix B.  NRHS >= 0.
+    !
+    !  A       (input/output) DOUBLE PRECISION array, dimension (LDA,N)
+    !          On entry, the N-by-N coefficient matrix A.
+    !          On exit, the factors L and U from the factorization
+    !          A = P*L*U; the unit diagonal elements of L are not stored.
+    !
+    !  LDA     (input) INTEGER
+    !          The leading dimension of the array A.  LDA >= max(1,N).
+    !
+    !  IPIV    (output) INTEGER array, dimension (N)
+    !          The pivot indices that define the permutation matrix P;
+    !          row i of the matrix was interchanged with row IPIV(i).
+    !
+    !  B       (input/output) DOUBLE PRECISION array, dimension (LDB,NRHS)
+    !          On entry, the N-by-NRHS matrix of right hand side matrix B.
+    !          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
+    !
+    !  LDB     (input) INTEGER
+    !          The leading dimension of the array B.  LDB >= max(1,N).
+    !
+    !  INFO    (output) INTEGER
+    !          = 0:  successful exit
+    !          < 0:  if INFO = -i, the i-th argument had an illegal value
+    !          > 0:  if INFO = i, U(i,i) is exactly zero.  The factorization
+    !                has been completed, but the factor U is exactly
+    !                singular, so the solution could not be computed.
+
+  end subroutine lapack_solve_general
+
+  subroutine blas_matmul(A,B,C)
+    ! multiply two matrices to get C=A*B by using blas/atlas routine. Should be better than matmul for large arrays
+
+    ! http://www.netlib.org/blas/dgemm.f
+    ! http://software.intel.com/sites/products/documentation/hpc/compilerpro/en-us/cpp/win/mkl/refman/bla/functn_gemm.html
+    
+    real(8), intent(in) :: A(:,:), B(:,:)
+    real(8), intent(inout) :: C(:,:)
+
+    real(8) :: alpha, beta
+    integer :: m, n, k, LDA, LDB, LDC
+    character:: TRANSA*1, TRANSB*1
+
+    external :: DGEMM
+
+    
+    TRANSA = 'N'
+    TRANSB = 'N'
+    m = size(A,1)
+    n = size(B,2)
+    k = size(A,2)
+    lda = m
+    ldb = k
+    ldc = m
+    alpha = 1d0
+    beta = 0d0
+
+
+    call dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+
+    !  Arguments
+    !  ==========
+    !
+    !  TRANSA - CHARACTER*1.
+    !           On entry, TRANSA specifies the form of op( A ) to be used in
+    !           the matrix multiplication as follows:
+    !
+    !              TRANSA = 'N' or 'n',  op( A ) = A.
+    !
+    !              TRANSA = 'T' or 't',  op( A ) = A**T.
+    !
+    !              TRANSA = 'C' or 'c',  op( A ) = A**T.
+    !
+    !           Unchanged on exit.
+    !
+    !  TRANSB - CHARACTER*1.
+    !           On entry, TRANSB specifies the form of op( B ) to be used in
+    !           the matrix multiplication as follows:
+    !
+    !              TRANSB = 'N' or 'n',  op( B ) = B.
+    !
+    !              TRANSB = 'T' or 't',  op( B ) = B**T.
+    !
+    !              TRANSB = 'C' or 'c',  op( B ) = B**T.
+    !
+    !           Unchanged on exit.
+    !
+    !  M      - INTEGER.
+    !           On entry,  M  specifies  the number  of rows  of the  matrix
+    !           op( A )  and of the  matrix  C.  M  must  be at least  zero.
+    !           Unchanged on exit.
+    !
+    !  N      - INTEGER.
+    !           On entry,  N  specifies the number  of columns of the matrix
+    !           op( B ) and the number of columns of the matrix C. N must be
+    !           at least zero.
+    !           Unchanged on exit.
+    !
+    !  K      - INTEGER.
+    !           On entry,  K  specifies  the number of columns of the matrix
+    !           op( A ) and the number of rows of the matrix op( B ). K must
+    !           be at least  zero.
+    !           Unchanged on exit.
+    !
+    !  ALPHA  - DOUBLE PRECISION.
+    !           On entry, ALPHA specifies the scalar alpha.
+    !           Unchanged on exit.
+    !
+    !  A      - DOUBLE PRECISION array of DIMENSION ( LDA, ka ), where ka is
+    !           k  when  TRANSA = 'N' or 'n',  and is  m  otherwise.
+    !           Before entry with  TRANSA = 'N' or 'n',  the leading  m by k
+    !           part of the array  A  must contain the matrix  A,  otherwise
+    !           the leading  k by m  part of the array  A  must contain  the
+    !           matrix A.
+    !           Unchanged on exit.
+    !
+    !  LDA    - INTEGER.
+    !           On entry, LDA specifies the first dimension of A as declared
+    !           in the calling (sub) program. When  TRANSA = 'N' or 'n' then
+    !           LDA must be at least  max( 1, m ), otherwise  LDA must be at
+    !           least  max( 1, k ).
+    !           Unchanged on exit.
+    !
+    !  B      - DOUBLE PRECISION array of DIMENSION ( LDB, kb ), where kb is
+    !           n  when  TRANSB = 'N' or 'n',  and is  k  otherwise.
+    !           Before entry with  TRANSB = 'N' or 'n',  the leading  k by n
+    !           part of the array  B  must contain the matrix  B,  otherwise
+    !           the leading  n by k  part of the array  B  must contain  the
+    !           matrix B.
+    !           Unchanged on exit.
+    !
+    !  LDB    - INTEGER.
+    !           On entry, LDB specifies the first dimension of B as declared
+    !           in the calling (sub) program. When  TRANSB = 'N' or 'n' then
+    !           LDB must be at least  max( 1, k ), otherwise  LDB must be at
+    !           least  max( 1, n ).
+    !           Unchanged on exit.
+    !
+    !  BETA   - DOUBLE PRECISION.
+    !           On entry,  BETA  specifies the scalar  beta.  When  BETA  is
+    !           supplied as zero then C need not be set on input.
+    !           Unchanged on exit.
+    !
+    !  C      - DOUBLE PRECISION array of DIMENSION ( LDC, n ).
+    !           Before entry, the leading  m by n  part of the array  C must
+    !           contain the matrix  C,  except when  beta  is zero, in which
+    !           case C need not be set on entry.
+    !           On exit, the array  C  is overwritten by the  m by n  matrix
+    !           ( alpha*op( A )*op( B ) + beta*C ).
+    !
+    !  LDC    - INTEGER.
+    !           On entry, LDC specifies the first dimension of C as declared
+    !           in  the  calling  (sub)  program.   LDC  must  be  at  least
+    !           max( 1, m ).
+    !           Unchanged on exit.
+
+
+  end subroutine blas_matmul
+  
 
 end module numeth
 

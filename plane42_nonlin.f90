@@ -39,7 +39,7 @@ CONTAINS
   
   ke=0.0
   eresidual =0.0
-	! Måske skal Mmat flyttes ind i løkken. Jeg tror det ikke, da spændingen altid evalueres i midten!
+	! MÃ¥ske skal Mmat flyttes ind i lÃ¸kken. Jeg tror det ikke, da spÃ¦ndingen altid evalueres i midten!
 	do i= 1,ng !number of gauss points
 		do j = 1,ng
         	call plane42nonlin_shape(xe,de, xi(i), eta(j), Nmat,Bmat,B0mat,BLmat,Gmat, jac, detjac)
@@ -226,7 +226,7 @@ SUBROUTINE plane42nonlin_shape(xe,de, xi, eta, Nmat,Bmat,B0mat,BLmat,Gmat, jac, 
     Amat(3,3)=theta(1)
     Amat(3,4)=theta(2)
     
-    produkthelp = MATMUL(L, GAMMAtilde) !hjælpeprodukt ved B=[L]*[GAMMAtilde]*[Ntilde]
+    produkthelp = MATMUL(L, GAMMAtilde) !hjÃ¦lpeprodukt ved B=[L]*[GAMMAtilde]*[Ntilde]
     b0mat = MATMUL(produkthelp, Ntilde)! Bmat for linear deformation
     bLmat = MATMUL(Amat,Gmat)! Bmat non-lin deformation. (8) i extra note
     bmat = b0mat + bLmat !Bmat used for calculating tangent stiffness

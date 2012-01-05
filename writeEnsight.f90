@@ -215,9 +215,9 @@ subroutine EnsightCase(VarName,ntini,nstop,nprint)
 !!$     'VARIABLE')
 !!$
 !!$ select case(element_val)
-!!$   	case(0) ! knudev�rdi
+!!$   	case(0) ! knudevï¿½rdi
 !!$		plot_type = 'node'
-!!$   	case(1)	! elementv�rdi
+!!$   	case(1)	! elementvï¿½rdi
 !!$		plot_type = 'element'
 !!$ end select
 !!$

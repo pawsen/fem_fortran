@@ -5,7 +5,7 @@ module piezo
   private :: buildstiff_piezo, rb_init_piezo, recover_potential, enforce_piezo
   public :: initial_piezo, displ_piezo
 
-  public :: buildstiff_eigenvalue_piezo
+  public :: buildstiff_eigenvalue_piezo, inverse_sparse
 
   private :: buildS_piezo,get_element_matrix_piezo
 
@@ -38,7 +38,7 @@ contains
        dof = 12 ! mechanical dof for one element
        nzz = (dof*dof+4*4)*ne+2*4*dof*ne+2*nb
     else if ( ((elem_type == 'PLATE_GMSH') .and. eigenvalue%calc) .or. &
-        ( antype == 'TOPSTRUCT_EIGEN') ) then
+         ( antype == 'TOPSTRUCT_EIGEN') ) then
        neqn = 3*nn
        neqn_nb = neqn
        dof = 12
@@ -144,7 +144,7 @@ contains
        call buildstiff_piezo(flagger)
        ! Remove rigid body modes
        call enforce_piezo
-       
+
        d = p
        call mumps_init_real
        call mumps_solve_real(6)
@@ -314,7 +314,8 @@ contains
     integer, intent(in) :: flag, e
     integer, intent(out) :: edof(:), edof41(:), nen
     !real(8), intent(out) :: xe(:)
-    real(8), intent(out), dimension(:,:) :: ke_stiff,ke_piezo,ke_piezo_transpose,ke_dielectric
+    real(8), intent(out), dimension(:,:) ::ke_stiff
+    real(8), intent(out), dimension(:,:), optional :: ke_piezo, ke_piezo_transpose, ke_dielectric
     real(8), intent(out), dimension(:,:), optional :: me
 
     real(8), dimension(8) :: xe
@@ -324,7 +325,7 @@ contains
     ! Find coordinates and degrees of freedom
     call get_edof(e,nen,xe,edof41,edof)
 
-    ! hvis alle elementer er ens, skal nedenst�ende kun k�res �n gang
+    ! hvis alle elementer er ens, skal nedenstï¿½ende kun kï¿½res ï¿½n gang
     if ( ((flag == 0) .or. (e == 1))) then
        ! Gather material properties and find element stiffness matrix
        young = mprop(element(e)%mat)%young
@@ -332,7 +333,7 @@ contains
        nu = mprop(element(e)%mat)%nu
        shear = mprop(element(e)%mat)%shear
        dens  = mprop(element(e)%mat)%dens
-       phi = 0!
+       phi = 0d0
 
        select case( element(e)%id )
        case( 2 )
@@ -340,49 +341,59 @@ contains
           !call plane42_ke(xe,young, nu, thk, ng, ke_stiff)
           phi = 0 ! pi/4d0
           call plane42_ke_piezo(xe,mat_vec, young, nu, thk, ng, ke_stiff,phi)
-          call plane42_piezo(xe, mat_vec, thk,ng, ke_piezo,phi)
-          call plane41_dielectric(xe,mat_vec, thk,ng, ke_dielectric,phi)
-          ke_piezo_transpose = TRANSPOSE(ke_piezo)
+          if (present(ke_piezo)) then
+             call plane42_piezo(xe, mat_vec, thk,ng, ke_piezo,phi)
+             call plane41_dielectric(xe,mat_vec, thk,ng, ke_dielectric,phi)
+             ke_piezo_transpose = TRANSPOSE(ke_piezo)
+          end if
           !call plane42_me(xe, dens, ng, me, thk)
           !             ce = alpha1*me+beta1*ke_stiff
        case(3) ! plate
-          phi =  0! pi!pi/4d0
-          ep = mprop(element(e)%mat)%ep
-
-          call mindlin42_ke(xe, young, nu, dens, thk, shear,ng, ke_stiff,2,mat_vec,phi)
-          call mindlin42_piezo(xe, mat_vec, thk,ng,ke_piezo,phi)
-          call mindlin42_dielectric(xe,mat_vec,ep, thk,ng, ke_dielectric,2,phi)
-          ke_piezo_transpose = TRANSPOSE(ke_piezo)
+          phi =  0d0! pi!pi/4d0
+          call mindlin42_ke(xe, young, nu, dens, thk, shear,ng, ke_stiff,2,mat_vec)
+          if (present(ke_piezo)) then
+             ep = mprop(element(e)%mat)%ep
+             call mindlin42_piezo(xe, mat_vec, thk,ng,ke_piezo)
+             call mindlin42_dielectric(xe,mat_vec,ep, thk,ng, ke_dielectric,2)
+             ke_piezo_transpose = TRANSPOSE(ke_piezo)
+          end if
 
           if (present(me)) then
              call mindlin42_me(xe,dens,mat_vec,thk,ng,me,2)
           end if
        case(4) ! polariseret piezo, ringmotor
-          ep = mprop(element(e)%mat)%ep
           phi = element(e)%ptz
           call mindlin42_ke(xe, young, nu, dens, thk, shear,ng, ke_stiff,2,mat_vec,phi)
-          call mindlin42_piezo(xe, mat_vec, thk,ng,ke_piezo,phi)
-          call mindlin42_dielectric(xe,mat_vec,ep, thk,ng, ke_dielectric,2,phi)
-          ke_piezo_transpose = TRANSPOSE(ke_piezo)
+          if (present(ke_piezo)) then
+             ep = mprop(element(e)%mat)%ep
+             call mindlin42_piezo(xe, mat_vec, thk,ng,ke_piezo,phi)
+             call mindlin42_dielectric(xe,mat_vec,ep, thk,ng, ke_dielectric,2,phi)
+             ke_piezo_transpose = TRANSPOSE(ke_piezo)
+          end if
 
           if (present(me)) then
              call mindlin42_me(xe,dens,mat_vec,thk,ng,me,2)
           end if
        case(5) ! polariseret piezo, ringmotor
-          ep = mprop(element(e)%mat)%ep
           phi = element(e)%ptz + pi ! polariseret modsat
           call mindlin42_ke(xe, young, nu, dens, thk, shear,ng, ke_stiff,2,mat_vec,phi)
-          call mindlin42_piezo(xe, mat_vec, thk,ng,ke_piezo,phi)
-          call mindlin42_dielectric(xe,mat_vec,ep, thk,ng, ke_dielectric,2,phi)
-          ke_piezo_transpose = TRANSPOSE(ke_piezo)
+          if (present(ke_piezo)) then
+             ep = mprop(element(e)%mat)%ep
+             call mindlin42_piezo(xe, mat_vec, thk,ng,ke_piezo,phi)
+             call mindlin42_dielectric(xe,mat_vec,ep, thk,ng, ke_dielectric,2,phi)
+             ke_piezo_transpose = TRANSPOSE(ke_piezo)
+          end if
 
           if (present(me)) then
              call mindlin42_me(xe,dens,mat_vec,thk,ng,me,2)
           end if
        case(6) !rent pcb, ringmotor
-          ep = mprop(element(e)%mat)%ep
-          call mindlin42_dielectric(xe,mat_vec,ep, thk,ng, ke_dielectric,1)
           call mindlin42_ke(xe, young, nu, dens, thk, shear,ng, ke_stiff,1,mat_vec) !type = 1
+          if (present(ke_dielectric)) then
+             ep = mprop(element(e)%mat)%ep
+             call mindlin42_dielectric(xe,mat_vec,ep, thk,ng, ke_dielectric,1)
+          end if
+
           if (present(me)) then
              call mindlin42_me(xe,dens,mat_vec,thk,ng,me,1)
           end if
@@ -391,77 +402,47 @@ contains
 
   end subroutine get_element_matrix_piezo
 
-  subroutine buildstiff_eigenvalue_piezo(rho,rho_min)
+  subroutine buildstiff_eigenvalue_piezo(shift,rho,rho_min)
 
     ! This subroutine builds the global stiffness matrix from
     ! the local element stiffness matrices.
 
     use fedata
-    use numeth
+    use fea, only : assemble_sparse, sparse_add_lagrangian
 
+    logical, intent(in) :: shift
     real(8), optional, intent(in) :: rho(:), rho_min
 
     integer :: e,i,j,idof,nen,ii,jj, flag
     integer, parameter ::kk=3, mdim = 12 , ndim = 4 ! mindlin
-    !    integer, parameter ::kk = 2, mdim = 8 , ndim = 4 ! bj�lke
+    !    integer, parameter ::kk = 2, mdim = 8 , ndim = 4 ! bjælke
 
     integer, dimension(ndim) :: edof41
     integer, dimension(mdim) :: edof
     real(8), dimension(8) :: xe
-    real(8), dimension(mdim, mdim) :: ke_stiff, me
-    real(8) :: ke_piezo(mdim,ndim), ke_dielectric(ndim,ndim), ke_piezo_transpose(ndim,mdim)
-    real(8) :: helpmat0(4,4),helpmat1(12,4),helpmat2(12,12)
+    real(8), dimension(mdim, mdim) :: ke
 
-
-    ke_stiff = 0d0
-    ke_piezo = 0d0
-    ke_dielectric = 0d0
-    ke_piezo_transpose = 0d0
-
-    helpmat2 = 0d0
-    
+    ke = 0d0
     flag = 0
     ii = 0
     jj = 0
     do e = 1, ne
-       
-       call get_element_matrix_piezo(flag,e,edof,edof41,nen,&
-            ke_stiff,ke_piezo,ke_piezo_transpose,ke_dielectric)
 
-       if ( element(e)%id /= 6 ) then
-          ! helpmat0 = inv_matrix(ke_dielectric)
-          ! helpmat1 = MATMUL(ke_piezo, helpmat0)
-          ! helpmat2 = MATMUL(helpmat1,ke_piezo_transpose)
-       else
-          helpmat2 = 0d0
-       end if
+       call get_element_matrix_piezo(flag,e,edof,edof41,nen,ke)
 
        ! Assemble into global matrix
-       ! Stiffness
        if (present(rho) .and. (element(e)%mat /=2) ) then
-          jj = jj +1
-          do i = 1, kk*nen
-             do j =1, kk*nen
-                ii = ii+1
-                iK(ii) = edof(i)
-                jK(ii) = edof(j)
-                sK(ii) = (rho_min+(1d0-rho_min)*rho(jj)**penal)* ke_stiff(i,j) - &
-                     0*helpmat2(i,j)
-             end do
-          end do
+          call assemble_sparse(nen,kk,ii,edof,ke,jj,rho,rho_min)
        else
-          do i = 1, kk*nen
-             do j =1, kk*nen
-                ii = ii+1
-                iK(ii) = edof(i)
-                jK(ii) = edof(j)
-                sK(ii) = ke_stiff(i,j) -0*helpmat2(i,j)
-             end do
-          end do
+          call assemble_sparse(nen,kk,ii,edof,ke)
        end if
 
-       !sinve we do sparse matrix-vector multiplication, wo dont need lagrangian RB.
     end do
+
+    !add values from lagrangian multipliers
+    if (shift) then
+       call sparse_add_lagrangian(kk,ii)
+    end if
 
   end subroutine buildstiff_eigenvalue_piezo
 
@@ -512,7 +493,7 @@ contains
     use fedata
     use plot_routiner
 
-    integer, intent(IN) :: rand_int(:) ! m� ikke hedde rand, da rand er initialiseret i fedata, DOH!!!
+    integer, intent(IN) :: rand_int(:) ! må ikke hedde rand, da rand er initialiseret i fedata, DOH!!!
     real(8), intent(IN) :: rand_val(:)
     integer :: i, e, nen, nb_temp
     integer :: number_elements_x, number_elements_y, number_nodes_y, number_nodes_x, ny,nx
@@ -536,7 +517,7 @@ contains
 
     length_first_element= x(element(1)%ix(2),1)-x(element(1)%ix(1),1)
     hight_first_element= x(element(1)%ix(4),2)-x(element(1)%ix(1),2)
-    number_elements_x = NINT(lx/length_first_element) ! Antal elemnter i x-retningen ! runder op til n�rmeste integer. Hvis nint ikke medtages, rundes der forkert af
+    number_elements_x = NINT(lx/length_first_element) ! Antal elemnter i x-retningen ! runder op til nærmeste integer. Hvis nint ikke medtages, rundes der forkert af
     number_nodes_x = number_elements_x+1 ! Alternativt nn/number_nodes_y
     number_elements_y = NINT(ly/hight_first_element) ! Antal elemnter i y-retningen
     number_nodes_y = number_elements_y+1 !Antal knuder i y-retningen
@@ -616,7 +597,7 @@ contains
     integer :: e, i, j, ii, type
     integer :: nen, idof
     integer, parameter ::kk=3, mdim = 12 , ndim = 4 ! mindlin
-    !    integer, parameter ::kk = 2, mdim = 8 , ndim = 4 ! bj�lke
+    !    integer, parameter ::kk = 2, mdim = 8 , ndim = 4 ! bjælke
 
     integer, dimension(ndim) :: edof41
     integer, dimension(mdim) :: edof
@@ -754,7 +735,7 @@ contains
              pZ(neqn+nn+i) = CMPLX(bound(i, 3),0d0)
           case(12) ! sin
              !(a+ib)*(c+id) = (a*c-b*d) + i(a*d + b*c)
-             ! S� for at f� en komplex p�virkning s�ttes a=1,b=0 & c=0,d=-pot
+             ! Så for at få en komplex påvirkning sættes a=1,b=0 & c=0,d=-pot
              pZ(neqn+nn+i) = CMPLX(0d0,-bound(i, 3))
 
           case default ! resten, incl geometrisk constraint
@@ -772,14 +753,14 @@ contains
 
   SUBROUTINE sweep_piezo(flag,rho,sweep) ! Frecuency Sweep
 
-	use fedata
+    use fedata
     use plot_routiner
-	use solve_handle_complex
+    use solve_handle_complex
 
     integer, intent(in) :: flag!, points
     !    character(len=*), intent(in) :: title
-	integer :: i
- !    real(8),pointer, intent(in) :: sweep(:)
+    integer :: i
+    !    real(8),pointer, intent(in) :: sweep(:)
     real(8), intent(in) :: rho(ne) , sweep(:)
     real(8), dimension(:,:), allocatable :: sweepout ! Matrix med frekvens (:,1) og eftergivenhed (:,2)
     real(8) :: lower, upper, omega
@@ -793,11 +774,11 @@ contains
     allocate(sweepout(points,4))
     sweepout = 0.0d0
 
-	print*, 'sweeping from omega ', lower, ' to ', upper
+    print*, 'sweeping from omega ', lower, ' to ', upper
 
-	do i=1,points-1
-       sweepout(i,1) = lower+(real(i)-1.0)*(upper-lower)/(real(points)-1.0) !Line�r interpolation af frekvens
-	end do
+    do i=1,points-1
+       sweepout(i,1) = lower+(real(i)-1.0)*(upper-lower)/(real(points)-1.0) !Lineær interpolation af frekvens
+    end do
     sweepout(points,1) = upper
 
     do i=1,points
@@ -839,7 +820,7 @@ contains
     integer :: i, n_iter
     real(8), allocatable :: thickness(:)
     character(len=2) :: str
-    
+
     n_iter = 16
     allocate(thickness(n_iter))
 
@@ -851,11 +832,11 @@ contains
        mat_vec(14) = thickness(i)/3d0
        mat_vec(15) = thickness(i)/3d0
        mat_vec(16) = thickness(i)/3d0
-      
-       
+
+
        ! solve the problem with different thickness
        call displ_piezo(0,plot_bool=.true.)
-       
+
        !save deflection in .m file
        write(str,'(I2)') i
        call output_vector(d(1:neqn:3),'thickness_'//trim(adjustl(str)))
@@ -864,20 +845,442 @@ contains
 
   end subroutine ratio_length_thickness
 
-  subroutine inverse_sparse
+  subroutine inverse_sparse!(inv_mat)
 
     use fedata
     use solve_handle_real
+    use sblas
+    use numeth
+    use input_test, only : matrix_input
 
-    integer :: i
+    real(8), pointer :: inv_mat(:,:)
 
-    call mumps_init_real
-    call mumps_solve_real(4)!factorize
+    integer :: nzz
+    integer, dimension(:), allocatable,target :: iK2,jK2, ik3, jk3
+    real(8), dimension(:), allocatable, target :: sK2 , rhs, sk3
+    real(8), allocatable ::  out_mat(:,:), mat(:,:) !, inv_mat(:,:)
+    real(8), allocatable :: k_piezo(:,:), k_dielc(:,:)
 
-    do i=1,nn
-       call mumps_solve_real(4)
+    integer :: e,i,j,idof,mdim,kk,nen,ii,jj, nb_rb
+    integer, parameter :: ndim = 4
+
+    integer, dimension(ndim) :: edof41
+    integer,dimension(:), allocatable :: edof
+    real(8), dimension(8) :: xe
+    real(8), dimension(:,:), allocatable :: ke_stiff, me
+    real(8), dimension(:,:), allocatable :: ke_piezo, ke_dielectric, ke_piezo_transpose
+    !external :: lapack_inverse_matrix
+
+    integer :: brug_mmul
+    real(8) :: dp
+    logical, parameter :: debug = .false.!.true.
+
+    if (debug) then ! test structure
+       nn = 50
+       neqn = 100
+
+       nzz = 1000
+       allocate(ik2(nzz),jK2(nzz),sK2(nzz))
+       nzz = 2000
+       allocate(ik3(nzz),jK3(nzz),sK3(nzz))
+
+       allocate (mat(1000,3))
+       call matrix_input('permativitet',mat)
+       ik2 = mat(:,1)
+       jk2 = mat(:,2)
+       sk2 = mat(:,3)
+
+       deallocate(mat)
+       allocate (mat(2000,3))
+       call matrix_input('piezo',mat)
+       ik3 = mat(:,1)
+       jk3 = mat(:,2)
+       sk3 = mat(:,3)
+
+    else
+
+
+       select case( element(1)%id )
+       case(2)
+          neqn = nn*2
+          mdim = 8
+          kk = 2
+       case default
+          neqn = nn*3
+          mdim = 12
+          kk = 3
+       end select
+       allocate(ke_stiff(mdim,mdim), me(mdim,mdim), edof(mdim))
+       allocate(ke_piezo(mdim,ndim), ke_dielectric(ndim,ndim), ke_piezo_transpose(ndim,mdim) )
+
+       allocate(k_dielc(nn,nn))
+       allocate(k_piezo(neqn,nn))
+       k_dielc = 0d0
+       k_piezo = 0d0
+       
+       do e = 1, ne
+          !assemble dielectric matrix
+          call get_element_matrix_piezo(0,e,edof,edof41,nen,&
+               ke_stiff,ke_piezo,ke_piezo_transpose,ke_dielectric)
+
+          k_dielc(edof41, edof41) = k_dielc(edof41, edof41) + ke_dielectric
+          k_piezo(edof, edof41) = k_piezo(edof, edof41) + ke_piezo
+
+       end do
+    end if
+
+
+
+
+    print*,'neqn', neqn
+    print*,'nn ', nn
+    ! inverse of dielc
+    k_dielc =  lapack_inverse_matrix(k_dielc)
+    print*,'hertil1'
+
+
+
+!     deallocate(k_piezo)
+!     allocate(mat(10,10),out_mat(10,10))
+!     allocate(k_piezo(10,10))
+
+!     do i=1,size(mat,1)
+!        do j=1,size(mat,2)
+!           mat(i,j) =real( i*j)
+!           out_mat(i,j) = real(i**2 * j**2)
+!        end do
+!     end do
+
+!     k_piezo = MATMUL(mat,out_mat)
+    
+!     dp = 0d0
+!     do i = 1,10
+!        dp = dp + sqrt(dot_product(k_piezo(i,:),k_piezo(i,:)))
+!     end do
+!     print*,'dp', dp
+
+!     WRITE(*,*) 
+!     DO I = 1, 10
+!        !print*,(k_piezo(i,j),j=1,10)
+!        !WRITE(*,9998) (k_piezo(i,j),j=1,10)
+!     END DO
+
+! 9998 FORMAT( 11(:,1X,f6.2) )
+
+!     k_piezo = 0d0
+
+!     call blas_matmul(mat,out_mat,k_piezo)
+
+!     dp = 0d0
+!     do i = 1,10
+!        dp = dp + sqrt(dot_product(k_piezo(i,:),k_piezo(i,:)))
+!     end do
+!     print*,'dp', dp
+    
+!     WRITE(*,*) 
+!     DO I = 1, 10
+!        !print*,(k_piezo(i,j),j=1,10)
+!        !WRITE(*,9998) (k_piezo(i,j),j=1,10)
+!     END DO
+
+!     mat = 0d0
+
+!     stop
+
+    
+    
+    
+
+
+
+    brug_mmul = 1
+    if (brug_mmul == 1) then
+
+
+       dp = 0d0
+       do i = 1,size(k_piezo,1)
+          dp = dp + sqrt(dot_product(k_piezo(i,:),k_piezo(i,:)))
+       end do
+       print*,'dp k_piezo', dp
+
+       dp = 0d0
+       do i = 1,size(k_dielc,1)
+          dp = dp + sqrt(dot_product(k_dielc(i,:),k_dielc(i,:)))
+       end do
+       print*,'dp k_dielc', dp
+
+
+       !allocate(mat(neqn,nn))
+       !mat = MATMUL(k_dielc , TRANSPOSE(K_piezo))
+       print*,'hertel2'
+       ! out_mat seems to have a density off ~ 0.444. density = nnz/(neqn^2)
+       !K_piezo = TRANSPOSE(K_piezo)
+
+
+       allocate(mat(neqn,nn))
+       print*,'hertel3'
+
+       mat = 0d0
+       call blas_matmul(k_dielc ,TRANSPOSE(K_piezo) ,mat)
+
+       dp = 0d0
+       do i = 1,size(mat,1)
+          dp = dp + sqrt(dot_product(mat(i,:),mat(i,:)))
+       end do
+       print*,'dp', dp
+
+
+
+       mat = MATMUL(k_dielc , TRANSPOSE(K_piezo))
+       dp = 0d0
+       do i = 1,size(mat,1)
+          dp = dp + sqrt(dot_product(mat(i,:),mat(i,:)))
+       end do
+       print*,'dp', dp
+
+       allocate(out_mat(neqn,neqn))
+       call blas_matmul(K_piezo,mat,out_mat)
+
+       dp = 0d0
+       do i = 1,size(out_mat,1)
+          dp = dp + sqrt(dot_product(out_mat(i,:),out_mat(i,:)))
+       end do
+       print*,'dp', dp
+
+       out_mat = MATMUL(K_piezo,mat)
+       dp = 0d0
+       do i = 1,size(out_mat,1)
+          dp = dp + sqrt(dot_product(out_mat(i,:),out_mat(i,:)))
+       end do
+       print*,'dp', dp
+
+
+       ! Count number of nnz in out_mat
+       ii = 0
+       do i =1, neqn
+          do j =1, neqn
+             if(out_mat(i,j) /= 0) then
+                ii = ii +1
+                print*,out_mat(i,j)
+             end if
+          end do
+       end do
+
+       stop
+
+
+       deallocate(k_dielc)
+
+       print*,'hertel4'
+
+       allocate(out_mat(neqn,neqn))
+       ! out_mat = MATMUL(K_piezo , MATMUL(k_dielc , TRANSPOSE(K_piezo)) )
+       call blas_matmul(K_piezo,mat,out_mat)
+       !out_mat = MATMUL(K_piezo , mat )
+
+
+       print*,'hertel3'
+       deallocate(k_piezo, mat)
+
+    else
+
+       allocate(mat(neqn,nn))
+       print*,'hertil2'
+       ! Der er måske et problem med transpose, da den transponerede matrice gemmes som et temporary array i stacken.
+       ! Og det er ikke sikkert der er hukommelse til det. Løsning
+
+       allocate(out_mat(nn,neqn))
+       out_mat = TRANSPOSE(K_piezo)
+       print*,'hertil3'
+
+       call blas_matmul(k_dielc , out_mat,mat)
+       !call blas_matmul(k_dielc ,TRANSPOSE(K_piezo) ,mat)
+       !mat = MATMUL(k_dielc,out_mat)
+
+
+       deallocate(k_dielc,out_mat)
+
+       print*,'hertil4'
+       allocate(out_mat(neqn,neqn))
+       call blas_matmul(K_piezo,mat,out_mat)
+       print*,'hertil5'
+       deallocate(k_piezo, mat)
+
+
+    end if
+
+    ! Count number of nnz in out_mat
+    ii = 0
+    do i =1, neqn
+       do j =1, neqn
+          if(out_mat(i,j) /= 0) then
+             ii = ii +1
+          end if
+       end do
+    end do
+    ! out_mat seems to have a density off ~ 0.444. density = nnz/(neqn^2)
+
+    ! count number of "forskydnings RB"
+    nb_rb = 0
+    do i=1,nb
+       if (bound(i,2) < 6) then! forskydning
+          nb_rb  = nb_rb+1
+       end if
     end do
 
+    nzz = 12*12*ne+2*nb_rb + ii
+    neqn_nb = neqn+nb_rb
+    if (allocated(ik)) then
+       deallocate(ik,jk,sk)
+    end if
+    allocate(iK(nzz),jK(nzz),sK(nzz))
+
+    ! Convert out_mat to coordinate sparse format
+    ii = 0
+    do i =1, neqn
+       do j =1, neqn
+          if(out_mat(i,j) /= 0) then
+             ii = ii +1
+             ik(ii) = i
+             jk(ii) = j
+             sK(ii) = out_mat(i,j)
+          end if
+       end do
+    end do
+    deallocate(out_mat)
+
+    do e = 1, ne
+       !assemble dielectric matrix
+       call get_element_matrix_piezo(0,e,edof,edof41,nen,&
+            ke_stiff,ke_piezo,ke_piezo_transpose,ke_dielectric)
+
+       ! Assemble into global matrix
+       ! Stiffness
+       do i = 1, kk*nen
+          do j =1, kk*nen
+             ii = ii+1
+             iK(ii) = edof(i)
+             jK(ii) = edof(j)
+             sK(ii) = ke_stiff(i,j)
+          end do
+       end do
+    end do
+
+
+    !lagrangian bounds
+    jj = 0
+    do i=1,nb
+       if (bound(i,2) < 6) then! forskydning
+          ! UPS: bound(i,3) is used both for temp and moments for
+          !  plates. Stupid!
+          jj = jj +1
+          idof = 3*(bound(i,1)-1) + bound(i,2)
+          ! nederste matrix
+          ii = ii+1
+          iK(ii) = neqn+jj
+          jK(ii) = idof
+          sK(ii ) = 1d0
+          ! matrix to the right
+          ii = ii+1
+          iK(ii) = idof
+          jK(ii) = neqn+jj
+          sK(ii ) = 1d0
+       end if
+    end do
+
+
+    ! Sparse. Men der er problemer med sparse multiply routinen, så nu kører vi full-matrix
+    !    do i = 1, nen
+    !       do j = 1, nen
+    !          ii = ii+1
+    !          iK2(ii) = edof41(i)
+    !          jK2(ii) = edof41(j)
+    !          sK2(ii) = ke_dielectric(i,j)
+    !       end do
+    !    end do
+
+    !    ! piezo coupling effect
+    !    do i = 1, kk*nen
+    !       do j = 1, nen
+    !          !matrix to the right            
+    !          jj = jj+1
+    !          iK3(ii) = edof(i)
+    !          jK3(ii) =  edof41(j)
+    !          sK3(ii) = ke_piezo(i,j)
+    !       end do
+    !    end do
+
+
+    ! call mumps_init_real(ik2,jk2,sk2,nn)
+    ! call mumps_solve_real(4)!factorize
+
+    ! if(associated(inv_mat))deallocate(inv_mat) 
+    ! allocate(inv_mat(nn,nn))
+
+    ! allocate(rhs(nn))
+    ! ! Invert dielectric matrix
+    ! do i=1,nn
+    !    rhs = 0d0
+    !    rhs(i) = 1d0
+    !    call mumps_solve_real(3,rhs)
+    !    inv_mat(:,i) = rhs
+    ! end do
+    ! call mumps_finalize_real
+
+    ! deallocate(ik2,jk2,sk2)
+    ! allocate(out_mat(neqn,nn))
+
+    ! !K_{u, \phi} * K_{\phi, \phi}^-1 ! right piezo mat
+    ! call sparse_dense_multiply(ik3,jk3,sk3,neqn,nn,inv_mat,out_mat)
+    ! deallocate(inv_mat)
+
+    ! print*,'1. sparse_mmul'
+
+    ! !K_{\phi, u}^T * out_mat ! lower piezo-mat, but transposed, so in reality right piezo mat
+    ! allocate(inv_mat(neqn,neqn))
+    ! call sparse_dense_multiply(ik3,jk3,sk3,neqn,nn,out_mat,inv_mat)
+    ! print*,'2. sparse_mmul'
+
+    ! !Transpose the result back. Now we have
+    ! !K_{u,\phi}*K_{\phi,\phi}^-1*K_{\phi,u}
+    ! inv_mat = TRANSPOSE(inv_mat)
+
+    if (debug) then
+       ! Make inv_mat positive definite by adding a possitive number to the diagonal
+       do i=1,neqn
+          inv_mat(i,i) = inv_mat(i,i) + 1.0E+4
+       end do
+
+       DEALLOCATE(rhs)
+       allocate(rhs(neqn))
+       rhs = 1d0
+       call lapack_solve_general(inv_mat,rhs)
+       print*,'succes!'
+       do i=1,neqn
+          write(*,*) rhs(i)
+       end do
+    end if
+
+
+
+    !########## TEST STRUCTURE ##########
+    ! Test til invertering af matrix
+    ! nzz = 9
+    ! nn = 3
+    !mat(1,:) = [1. , 5. , 2.]
+    !mat(2,:) = [1. , 1. , 7.]
+    !mat(3,:) = [0. , -3. , 4.]
+    ! skal resultere i
+    !inv_mat(1,:) = [-25. , 26. , -33.]
+    !inv_mat(2,:) = [ -4. , -4. ,   5.]
+    !inv_mat(3,:) = [  3. , -3. ,   4.]
+    !print*,'inv_mat'
+    !do i=1,3
+    !   print*,(inv_mat(i,j),j=1,3)
+    !end do
+    !##############################
+
   end subroutine inverse_sparse
-  
+
+
 end module piezo

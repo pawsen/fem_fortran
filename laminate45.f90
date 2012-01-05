@@ -110,7 +110,7 @@ CONTAINS
        end do
     end do
 
-    ! For at undgå shear-locking, skal k_s integreres med "single Gauss kvadrature"(dvs ng = 1), jf
+    ! For at undgÃ¥ shear-locking, skal k_s integreres med "single Gauss kvadrature"(dvs ng = 1), jf
     ! "Element Behavior", s 543 i cook
     xi_1 = 0d0
     eta_1 = 0d0
@@ -145,7 +145,7 @@ CONTAINS
        z(i) = real_parameters(i+3)
     end do
 
-    ! værdien af faktoren k, står på s 535 i cook
+    ! vÃ¦rdien af faktoren k, stÃ¥r pÃ¥ s 535 i cook
     k = 5d0/6d0
     
     Cmat = 0d0
@@ -167,7 +167,7 @@ CONTAINS
 
        if (shear < 1E-6 ) then! in case it's forgotten to give shear a value in input-file
           shear = young/(2*(1+nu))
-          print*,'shear er ikke angivet i inputfil. Værdi er udregnet, mindlin41.f90'
+          print*,'shear er ikke angivet i inputfil. VÃ¦rdi er udregnet, mindlin41.f90'
        end if
 
        ! shear stiffness
@@ -294,12 +294,12 @@ CONTAINS
     bb = (xe(11)-xe(2))/2d0
     re = 0d0
 
-    !Påført moment i x-retning
+    !PÃ¥fÃ¸rt moment i x-retning
     IF (eface == 1) THEN
        re(2) = fe
        re(5) = fe
 
-       !Påført moment i y-retning
+       !PÃ¥fÃ¸rt moment i y-retning
     ELSEIF (eface == 2) THEN
        re(6) = fe
        re(9) = fe
@@ -312,7 +312,7 @@ CONTAINS
        re(12)= fe
        re(3) = fe
 
-       !fordelt last på latteral side
+       !fordelt last pÃ¥ latteral side
     ELSEIF (eface == 5) THEN
        !Forces in z-dir.
        re(1) = aa*bb*fe !Node 1

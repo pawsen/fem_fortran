@@ -315,7 +315,7 @@ CONTAINS
 
 
     ! Build strain-displacement matrix ! for controid(midten) , dvs xi=eta=0
-    xi = 0.0 ! Tøjning evalueres i centrum
+    xi = 0.0 ! TÃ¸jning evalueres i centrum
     eta = 0.0
     call plane42_shape(xe, xi, eta, Nmat,bmat, jac, detjac)
 
@@ -439,10 +439,10 @@ CONTAINS
           call plane42_shape(xe, xi(i), eta(j),Nmat, bmat, jac, detjac)
           call plane41_shape(xe, xi(i), eta(j), Nvec, bmat_t, detjac_t, jac_t)
           helpproduct = MATMUL(MATMUL(TRANSPOSE(Bmat),Cmat), epsilon)
-          !$$$$$$       call vector_mul(helpproduct,Nvec,helpproduct2) ! dimension af rThermal afhænger af rækkefølgen af input-vektorerne til vector_mul
+          !$$$$$$       call vector_mul(helpproduct,Nvec,helpproduct2) ! dimension af rThermal afhÃ¦nger af rÃ¦kkefÃ¸lgen af input-vektorerne til vector_mul
           !$$$$$$       Ae = Ae + W(i)*W(j)*thk* helpproduct2 *detjac
 
-          call vector_mul(Nvec,helpproduct,helpproduct2) ! dimension af rThermal afhænger af rækkefølgen af input-vektorerne til vector_mul
+          call vector_mul(Nvec,helpproduct,helpproduct2) ! dimension af rThermal afhÃ¦nger af rÃ¦kkefÃ¸lgen af input-vektorerne til vector_mul
           Ae = Ae + W(i)*W(j)*thk* helpproduct2 *detjac
        end do
     end do
@@ -550,7 +550,7 @@ CONTAINS
     Ntilde(3,8) = -1.0/4.0*(1+eta)
     Ntilde(4,8) = 1.0/4.0*(1-xi)
 
-    produkthelp = MATMUL(L, GAMMAtilde) !hjælpeprodukt ved B=[L]*[GAMMAtilde]*[Ntilde]
+    produkthelp = MATMUL(L, GAMMAtilde) !hjÃ¦lpeprodukt ved B=[L]*[GAMMAtilde]*[Ntilde]
     bmat = MATMUL(produkthelp, Ntilde)
 
   END SUBROUTINE plane42_shape

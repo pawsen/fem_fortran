@@ -72,7 +72,7 @@ module fedata
    ! Naboskabsmatrice - Til filtering
    REAL(8), DIMENSION(:,:), allocatable :: neigh
 
-   ! ����������� Transient ������������
+   ! Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤ Transient Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤Â¤
    ! TopOpt
    real(8):: nu1, nu2, young1, young2, dens1, dens2
 
@@ -94,13 +94,11 @@ module fedata
    integer, dimension(:), allocatable,target :: iK,jK
    real(8), dimension(:), allocatable, target :: sK
    COMPLEX(8), DIMENSION(:), allocatable, target :: sKZ, dZ, Pz
+   integer :: nnz_ub !non-zeroes without bounds (lagrangian multiplier)
    logical :: harmonic
    real(8) :: mat_vec(20) ! vektor der indeholder materialedata for piezo-elektrisk
    ! mat_vec = [C11 C12 C13 C33 C44 C66 e31 e33 e15 ep11 ep33 layer layer_thk]
    ! integer, parameter :: plate_type = 1
-
-   integer, dimension(:), allocatable,target :: iK2,jK2
-   real(8), dimension(:), allocatable, target :: sK2  
 
    real(8), dimension(:), allocatable :: mvec
 

@@ -875,7 +875,7 @@ contains
 
     if (iter == 0 .or. iter == 1 .or. device == 4) then
        if (device == 0) then
-          ! �ndret af paw. Sat pgopen til altid at �bne xwin n�r device==0. Evt kan der skrives pgopen(''), s� vil den �bne det der er specificeret med PGPLOT_DEV (ved compilation time)
+          ! ændret af paw. Sat pgopen til altid at åbne xwin når device==0. Evt kan der skrives pgopen(''), så vil den åbne det der er specificeret med PGPLOT_DEV (ved compilation time)
           !se  http://www.astro.caltech.edu/~tjp/pgplot/subroutines.html#PGOPEN
           panel(window) = pgopen('/xwin ')
           !         panel(window) = pgopen('/SS')
@@ -1344,7 +1344,7 @@ contains
        write(13,*) ' min(yaxes(1),min(X(:,2))) max(yaxes(2),max(X(:,2))) ]);'
        write(13,*) 'axis equal;'
        write(13,*) 'axis off;'
-       !������������ Tilf�jet d 1.9-11 for shell41
+       !ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Tilfï¿½jet d 1.9-11 for shell41
     elseif (element(1)%id == 3) then
        write(13,*) 'subplot(2,1,2)'
        write(13,*) 'hold on'      

@@ -14,13 +14,16 @@ module solve_handle_real
 
 contains
 
-  subroutine mumps_init_real!(eigenvalue)
+  subroutine mumps_init_real(iK_in,jK_in,sK_in,N)!(eigenvalue)
 
     use fedata
     
     !logical, intent(in) :: eigenvalue
     !integer, intent(IN) :: type
     integer :: i
+    integer, intent(in), optional, target :: iK_in(:), jK_in(:)
+    real(8), intent(in), optional, target :: sK_in(:)
+    integer, intent(in), optional :: N
 
     CALL MPI_INIT(IERR)
     !Define a communicator for the package
@@ -35,12 +38,20 @@ contains
     CALL DMUMPS(id)
     IF ( id%MYID .eq. 0 ) THEN
 
-       id%N = neqn_nb
-       id%NZ = size(iK,1)
-       ! point to stiffness vectors
-       id%IRN => iK
-       id%JCN => jK
-       id%A => sK
+       if (present(iK_in)) then
+          id%N = N
+          id%NZ = size(iK_in,1)
+          id%IRN => iK_in
+          id%JCN => jK_in
+          id%A => sK_in
+       else
+          id%N = neqn_nb
+          id%NZ = size(iK,1)
+          ! point to stiffness vectors
+          id%IRN => iK
+          id%JCN => jK
+          id%A => sK
+       end if
 
        if ((antype == 'EIGEN') .or. eigenvalue%calc) then
           ALLOCATE( id%RHS ( id%N ) )
@@ -88,18 +99,22 @@ contains
     use numeth
 
     integer, intent(IN) :: type
-    real(8), optional, intent(in) :: rhs(:)
+    real(8), optional, intent(in), target :: rhs(:)
 
     INTEGER::  i ! , n ,nz,e, n2, display_print
 
     !real(8), allocatable, dimension(:) ::
     
-    select case(type)
-    case(3,5:6)
-       if (.not. eigenvalue%calc) then
-          id%RHS => d
-       end if
-    end select
+    if (present(rhs)) then
+       id%RHS => rhs
+    else
+       select case(type)
+       case(3,5:6)
+          if (.not. eigenvalue%calc) then
+             id%RHS => d
+          end if
+       end select
+    end if
 
     !Call package for solution
     select case(type)
@@ -149,7 +164,7 @@ contains
     nz = id%N
 
     id%RHS(1:n) = rhs
-    id%RHS(n+1:nz) = 0d0
+    id%RHS(n+1:nz) = 0d0!Lagrangian constraint. == displacement = 0.
 
     !Call package for solution
     select case(type)

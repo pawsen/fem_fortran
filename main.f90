@@ -15,6 +15,7 @@ program main
   use piezo
   use input_gmsh
   use arpack
+  use sblas
 
   implicit none
 
@@ -33,7 +34,7 @@ program main
      call input
   end if
 
-  read_rho = 0 ! 0: fra	1: indl�s rho fra fil ifm beregning af displ/varmefordeling
+  read_rho = 0 ! 0: fra	1: indlæs rho fra fil ifm beregning af displ/varmefordeling
   if (read_rho == 1) then
      allocate(rho(ne))
      call rho_input(rho,trim(filename)//'dir/'//trim(filename)//'_rho'//'.m') !linux_fejl
@@ -45,7 +46,7 @@ program main
   write(*,*)
 
 
-  ! unders�g om elementer er ens
+  ! undersï¿½g om elementer er ens
   !  call elements_equal(flag)
   !  write(*,10) "flag: ",flag, "antype: ",antype
   !  10 format(a,i3,3x,a,a)
@@ -53,6 +54,7 @@ program main
 !!$  call eigen
 !!$
 !!$  stop
+
 
   flag = 0
   if (antype == 'STATIC') then
@@ -97,7 +99,7 @@ program main
      call TopOpt(flag)
   else if (antype == 'NONLIN') then
      ! Displacement for geometric nonlinear problems.
-     flag = 0 ! da ke beregnes p� baggrund af forkydninger for det enkelte element, kan flag = 1 ikke bruges
+     flag = 0 ! da ke beregnes pï¿½ baggrund af forkydninger for det enkelte element, kan flag = 1 ikke bruges
      call initial_fea
      if (allocated(rho)) then
         penal = 3d0

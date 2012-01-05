@@ -8,7 +8,7 @@ MODULE thermal
 
 contains
 
-  !������������������������������������������������������������������
+  !ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
   ! Termiske rutiner. 1 frigedsgrad pr. knude., dvs 4 DOF pr element
 
   subroutine buildtermload(rho,rho_min)
@@ -26,17 +26,17 @@ contains
     real(8), dimension(mdim) :: xe
     real(8), dimension(ndim) :: rt
     real(8) :: fb, thk, t_inf, hconv
-    integer :: ce(3*ne) ! ce skal v�re st�rre end ne, da hvert element jo i princippet kan have konvektion p� alle flader.
-    ! og hver flade t�ller 1 i ce.
+    integer :: ce(3*ne) ! ce skal vï¿½re stï¿½rre end ne, da hvert element jo i princippet kan have konvektion pï¿½ alle flader.
+    ! og hver flade tï¿½ller 1 i ce.
 
     ! Build global termisk load vector, se (12.2-5), s. 460 i COOK for mere
     r_t = 0.0d0
-    nt = 0 ! number termisk-convection, t�llevariabel
+    nt = 0 ! number termisk-convection, tï¿½llevariabel
     do i = 1, np	
        ! Build convection contribution [r_h]
-       if (loads(i, 1) == 3) then !thermisk load specificeret i form af konvektion. Se linje ~540 i prosessor for v�rdier for load
+       if (loads(i, 1) == 3) then !thermisk load specificeret i form af konvektion. Se linje ~540 i prosessor for vï¿½rdier for load
           nt = nt + 1
-          e = loads(i, 2)	! element SFE virker p�
+          e = loads(i, 2)	! element SFE virker pï¿½
           eface = loads(i, 3) !face id
           t_inf = loads(i, 4) ! temp af omgivende fluid, t_inf
           hconv = loads(i, 5) ! h for element
@@ -98,7 +98,7 @@ contains
     conv_elem = ce(1:nt)
 
     ! Build volumetric heat generation contribution
-    ! - Kan sammenlignes med accelerationskrafter der virker "lige" meget p� alle elementer
+    ! - Kan sammenlignes med accelerationskrafter der virker "lige" meget pï¿½ alle elementer
     if (qint /= 0.0d0) then	
        do e = 1, ne
           nen = element(e)%numnode
@@ -157,7 +157,7 @@ contains
           xe(2*i  ) = x(edof(i),2) 
        end do
 
-       ! hvis alle elementer er ens, skal nedenst�ende kun k�res �n gang
+       ! hvis alle elementer er ens, skal nedenstï¿½ende kun kï¿½res ï¿½n gang
        if ( (flag == 0) .or. (e == 1) ) then
           ! Gather material properties and find element matrices
           select case( element(e)%id )
@@ -187,7 +187,7 @@ contains
           do i = 1, nen
              do j = 1, nen
                 g=edof(i)-edof(j)
-                if (g >= 0) then ! brug kun elementer der st�r under eller p� diagonalen i global K+
+                if (g >= 0) then ! brug kun elementer der stï¿½r under eller pï¿½ diagonalen i global K+
                    if (present(rho)) then !topOpt
                       k_t(g+1,edof(j)) = k_t(g+1,edof(j)) + (rho_min+(1.0d0-rho_min)*rho(e)**penal)*ke_t(i,j)
                       !print*,'hej'
@@ -205,7 +205,7 @@ contains
     nt = size(conv_elem,1) ! conv_elem laves i buildthermload
     do n = 1, nt
        i = conv_elem(n)
-       e = loads(i, 2)	! element SFE virker p�
+       e = loads(i, 2)	! element SFE virker pï¿½
        thk = mprop(element(e)%mat)%thk
        eface = loads(i, 3) !face id
        hconv = loads(i, 5) 	! h for element
@@ -270,7 +270,7 @@ contains
        if (.not. penalty) then
           do i = 1, nb
              if (bound(i,2) == 3) then ! temp prescribed
-                idof = bound(i,1) ! DOF = node_id, da der kun er �n dof pr knude
+                idof = bound(i,1) ! DOF = node_id, da der kun er ï¿½n dof pr knude
                 r_t = r_t - k_t(1:nn, idof) * bound(i, 3)
                 r_t(idof) = bound(i,3)
                 k_t(1:nn, idof) = 0.0d0
@@ -279,14 +279,14 @@ contains
              end if
           end do
        else
-          print*,'ERROR in enforce_term: Penalty method not implemented for thermal loads. - Men s� g�r det dog!!'
+          print*,'ERROR in enforce_term: Penalty method not implemented for thermal loads. - Men sï¿½ gï¿½r det dog!!'
        endif
     elseif(banded == 1) then ! banded
        if (.not. penalty) then
           do i = 1, nb
-             if (bound(i,2) == 3) then ! temp p� rand
+             if (bound(i,2) == 3) then ! temp pï¿½ rand
                 idof = bound(i,1)
-                ! nedenst�ende(kl_t) finder den v�rdi der skal l�gges til load-vektoren ved imposing af BC, jf (2.7-6) i COOK
+                ! nedenstï¿½ende(kl_t) finder den vï¿½rdi der skal lï¿½gges til load-vektoren ved imposing af BC, jf (2.7-6) i COOK
                 kl_t=0.0d0
                 do j = 1, idof-1
                    if (idof-j<bw_t) then
@@ -306,7 +306,7 @@ contains
                 k_t(2:bw_t,idof) = 0.0d0
                 do j=2,bw_t
                    if ((idof-(j-1)) > 0) then
-                      k_t(j,idof-(j-1)) = 0.0d0 ! s. fig 6.2 i noter(s. 42). R�kke i 'full matrix' bliver til sk� linje i 'banded matrix'.
+                      k_t(j,idof-(j-1)) = 0.0d0 ! s. fig 6.2 i noter(s. 42). Rï¿½kke i 'full matrix' bliver til skï¿½ linje i 'banded matrix'.
                    end if
                 end do
 
@@ -496,11 +496,11 @@ contains
        end if
 
        he_t = 0.0d0  
-       n_conv = size(conv_elem,1) !conv_elem indeholder index(i forhold til load-vektor) p� de elementer med konvektion
-       if (n_conv > 1) then ! m�ske overfl�digt?
+       n_conv = size(conv_elem,1) !conv_elem indeholder index(i forhold til load-vektor) pï¿½ de elementer med konvektion
+       if (n_conv > 1) then ! mï¿½ske overflï¿½digt?
           do j = 1, n_conv
              i = conv_elem(j)
-             if (e == loads(i, 2) ) then ! loads(i, 2) = element convection virker p�
+             if (e == loads(i, 2) ) then ! loads(i, 2) = element convection virker pï¿½
                 eface = loads(i, 3) !face id
                 hconv = loads(i, 5) ! h for element
 
@@ -510,7 +510,7 @@ contains
                 else
                    ! calculates the element boundary convection matrix [h_e]
                    call plane41_he_t(xe, eface, hconv, thk, he_t)
-                   exit ! stopper loop og fors�tter loppet over e
+                   exit ! stopper loop og forsï¿½tter loppet over e
                 end if
              endif
           end do
