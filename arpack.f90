@@ -3,7 +3,7 @@ MODULE arpack
 
   IMPLICIT NONE
 
-  PRIVATE
+  PRIVATE :: scale_eigenvector
   PUBLIC :: arpack_init, arpack_plane
 
 CONTAINS
@@ -58,11 +58,11 @@ CONTAINS
 
 
     call arpack_plane(n_eigen,neqn,shift,sigma,iK,jK,sK,nnz_ub,n_conv,eigenval,eigenvec)
+    
+    ! Plot eigenvectors
     call exodus_init
     do i=1,n_conv
        time =  SQRT(eigenval(i,1))/(2*pi)!egenfrekvens. Kun real-part
-       ! scale eigenvector
-       eigenvec(:,i) = eigenvec(:,i)/ SQRT( DOT_PRODUCT(eigenvec(1:neqn:3,i),eigenvec(1:neqn:3,i)) )
        call exodus_write_node(i, eigenvec(:,i))
        call exodus_write_time(i,time)
     end do
@@ -430,13 +430,12 @@ CONTAINS
              if (print_info == 1) then
                 call dmout(6, nconv, 3, d, maxncv, -6,'Ritz values (Real,Imag) and relative residuals')
              end if
-             print*,'eigenfrekvency '
-             do i=1,nev
-                print*,i, SQRT(d(i,1)) /(2.0*3.1415927 )
-                !print*,i, d(i,1)
-
-             end do
-             print*
+             ! print*,'eigenfrekvency '
+             ! do i=1,nev
+             !    print*,i, SQRT(d(i,1)) /(2.0*3.1415927 )
+             !    !print*,i, d(i,1)
+             ! end do
+             ! print*
 
           end if
 
@@ -486,33 +485,57 @@ CONTAINS
        !%---------------------------%
     end do
 
+
+
     if (nconv >0) then
-       !eigenval(1:nconv,:) = sqrt(d(1:nconv,1:3)) /(2.0*3.1415927 )
        eigenval(1:nconv,:) = d(1:nconv,1:3)
-       eigenvec(:,1:nconv) = v(1:neqn, 1:nconv)
+       !eigenval(1:nconv,:) = sqrt(d(1:nconv,1:3)) !/(2.0*3.1415927 )
+
+       ! Sort eigenvalues in decreasing order
+       call Shell_Sort_real(eigenval(:,1),index_list)
+       eigenval(:,2:3) = d(index_list,2:3)
+
+       do i=1,nconv
+          print*,'eigenfrekvency ', SQRT(eigenval(i,1)) /(2.0*3.1415927 )
+       end do
+       print*
+
+       eigenvec = v(1:neqn, index_list)
+!       eigenvec(:,1:nconv) = v(1:neqn, 1:nconv)
+
+       ! scale eigenvectors, so that \phi^T * [M] * \phi = 1
+       call scale_eigenvector(nconv,eigenvec )
+
        n_converged = nconv
     else
        print*,'No converged eigenvalues'
        error stop
     end if
 
-!!$    eigenval = d(1:n_eigenvalue,1:3)
-!!$    call Shell_Sort_real(eigenval(:,1),index_list)
-!!$    eigenval(:,2:3) = d(index_list,2:3)
-!!$    eigenvec = v(1:neqn, index_list)
-
-!!$    do i=1,nev
-!!$       print*,'eigenfrekvency ', SQRT(eigenval(i,1)) /(2.0*3.1415927 )
-!!$    end do
-!!$    print*
-!!$
-!!$    do i=1,nev
-!!$       print*,'eigenfrekvency ', index_list(i)
-!!$    end do
-!!$    print*
+    ! Print sorting list
+    ! do i=1,nconv
+    !    print*,'eigenfrekvency ', index_list(i)
+    ! end do
+    ! print*
 
 
   end subroutine arpack_plane
+
+  subroutine scale_eigenvector(nconv,eigenvec )
+    ! scale eigenvectors, so that \phi^T * [M] * \phi = 1
+
+    use fedata
+    integer, intent(in) :: nconv
+    real(8), intent(inout) :: eigenvec(:,:)
+
+    integer :: i
+    do i = 1,nconv
+       eigenvec(:,i) = eigenvec(:,i)/ &
+            SQRT( DOT_PRODUCT(eigenvec(:,i),mvec*eigenvec(:,i)) )
+    end do
+
+
+  end subroutine scale_eigenvector
 
 
 
